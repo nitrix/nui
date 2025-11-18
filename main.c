@@ -107,14 +107,24 @@ int main(void) {
 
         nui_frame();
 
+        #define RED 0xFF0000FF
+        #define GREEN 0x00FF00FF
+        #define BLUE 0x0000FFFF
+
         NUI {
-            nui_fixed(200, 200);
-            nui_background_color(0xFF0000FF);
+            nui_fixed(400, 200);
+            nui_background_color(RED);
             nui_padding(10, 10, 10, 10);
+            nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
 
             NUI {
                 nui_fixed(100, 100);
-                nui_background_color(0x00FF00FF);
+                nui_background_color(GREEN);
+            }
+
+            NUI {
+                nui_fixed(100, 100);
+                nui_background_color(BLUE);
             }
         }
 

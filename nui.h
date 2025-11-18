@@ -10,12 +10,18 @@ void nui_fini(void);
 void nui_frame(void);
 void nui_viewport(int width, int height);
 
+enum nui_layout {
+    NUI_LAYOUT_LEFT_TO_RIGHT,
+    NUI_LAYOUT_TOP_TO_BOTTOM,
+};
+
 enum nui_style_flags {
     NUI_STYLE_FLAG_BACKGROUND_COLOR = 1,
 };
 
 struct nui_element {
     int x, y, w, h;
+    enum nui_layout layout;
     struct { int top, right, bottom, left; } padding;
     struct nui_element *parent;
     struct nui_element **children;
@@ -35,6 +41,7 @@ void nui_element_end(void);
 #define NUI \
         NUI_ONCE(nui_element_begin(&(struct nui_element) {0}), nui_element_end())
 
+void nui_layout(enum nui_layout layout);
 void nui_fixed(int width, int height);
 void nui_fixed_width(int width);
 void nui_fixed_height(int height);

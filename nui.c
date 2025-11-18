@@ -149,12 +149,11 @@ void nui_padding(int top, int right, int bottom, int left) {
     ctx.current->padding.left = left;
 }
 
-void _nui_update_element(struct nui_element *el) {
-    if (el->parent) {
-        el->x += el->parent->padding.left;
-        el->y += el->parent->padding.top;
-    }
+void nui_layout(enum nui_layout layout) {
+    ctx.current->layout = layout;
+}
 
+void _nui_update_element(struct nui_element *el) {
     for (size_t i = 0; i < el->children_count; i++) {
         _nui_update_element(el->children[i]);
     }
@@ -164,20 +163,33 @@ void nui_update(void) {
     _nui_update_element(&ctx.root);
 }
 
-void _nui_render_element(const struct nui_element *el) {
+void _nui_render_element(const struct nui_element *el, int offset_x, int offset_y) {
     uint32_t color = 00000000;
     if (el->style.flags & NUI_STYLE_FLAG_BACKGROUND_COLOR) {
         color = el->style.background_color;
     }
 
-    ngl_draw_rect(el->x, el->y, el->w, el->h, color);
+    ngl_draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
+
+    // Padding.
+    offset_x += el->padding.left;
+    offset_y += el->padding.top;
 
     for (size_t i = 0; i < el->children_count; i++) {
-        _nui_render_element(el->children[i]);
+        struct nui_element *child = el->children[i];
+
+        _nui_render_element(child, offset_x, offset_y);
+
+        // Layout.
+        switch (el->layout) {
+            case NUI_LAYOUT_LEFT_TO_RIGHT: offset_x += child->w; break;
+            case NUI_LAYOUT_TOP_TO_BOTTOM: offset_y += child->h; break;
+        }
     }
 }
 
 void nui_render(void) {
     ngl_prepare(ctx.root.w, ctx.root.h);
-    _nui_render_element(&ctx.root);
+
+    _nui_render_element(&ctx.root, 0, 0);
 }
