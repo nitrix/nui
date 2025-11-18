@@ -18,7 +18,29 @@ static void _centerize(GLFWwindow *window) {
     }
 }
 
-int main(int argc, char **argv) {
+static void _on_framebuffer_size(GLFWwindow *window, int fb_width, int fb_height) {
+    (void) window;
+    nui_viewport(fb_width, fb_height);
+}
+
+static void _debug(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char *message, const void *param) {
+    (void) length;
+    (void) param;
+
+    // Ignore notifications about buffers hints (e.g. GL_STREAM_DRAW) that wont be honored
+    // and instead will use a different kind of memory as source for buffer object operations.
+    if (id == 131185) return;
+
+    // Ignore notifications about program/shader performance due to recompilation.
+    if (id == 131218) return;
+
+    // Ignore notifications about multisample storage allocatinos (the renderer does it on resizes by the ui).
+    if (id == 131169) return;
+
+    fprintf(stderr, "[OpenGL debug] source: %d, type: %d, id: %d, severity: %d, message: %s\n", source, type, id, severity, message);
+}
+
+int main(void) {
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
         return EXIT_FAILURE;
@@ -28,6 +50,7 @@ int main(int argc, char **argv) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
     GLFWwindow *window = glfwCreateWindow(1280, 720, "NUI Example", NULL, NULL);
@@ -46,11 +69,35 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    {
+        int context_flags;
+        glGetIntegerv(GL_CONTEXT_FLAGS, &context_flags);
+        bool has_debug_bit = context_flags & GL_CONTEXT_FLAG_DEBUG_BIT;
+
+        if (has_debug_bit) {
+            if (GLAD_GL_KHR_debug) {
+                glEnable(GL_DEBUG_OUTPUT);
+                glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+                glDebugMessageCallback(_debug, NULL);
+                glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
+            } else if (GLAD_GL_ARB_debug_output) {
+                glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
+                glDebugMessageCallbackARB(_debug, NULL);
+                glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
+            }
+        }
+    }
+
     _centerize(window);
     glfwShowWindow(window);
 
-    struct nui_context ctx;
-    nui_context_init(&ctx);
+    glfwSetFramebufferSizeCallback(window, _on_framebuffer_size);
+
+    nui_init();
+
+    int fb_width, fb_height;
+    glfwGetFramebufferSize(window, &fb_width, &fb_height);
+    nui_viewport(fb_width, fb_height);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -58,7 +105,21 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // nui_begin_frame(&ctx);
+        nui_frame();
+
+        NUI {
+            nui_fixed(200, 200);
+            nui_background_color(0xFF0000FF);
+
+            NUI {
+                nui_fixed(100, 100);
+                nui_background_color(0x00FF00FF);
+            }
+        }
+
+        nui_update();
+        nui_render();
+
         //// Example NUI usage
         // nui_window_begin(&ctx, "Hello, NUI!", 50, 50, 300, 200);
         // nui_text(&ctx, "This is a simple NUI example.");
@@ -69,7 +130,7 @@ int main(int argc, char **argv) {
         glfwSwapBuffers(window);
     }
 
-    nui_context_fini(&ctx);
+    nui_fini();
 
     glfwDestroyWindow(window);
     glfwTerminate();
