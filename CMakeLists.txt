@@ -8,5 +8,5 @@ add_executable(example main.c)
 target_link_libraries(example nui glad glfw)
 target_compile_options(example PRIVATE -std=c23 -Wall -Wextra -pedantic)
 
-add_library(nui STATIC nui.c nui.h)
+add_library(nui STATIC nui.c nui.h ngl.c ngl.h)
 target_link_libraries(nui PRIVATE glad)
