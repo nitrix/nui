@@ -21,7 +21,7 @@ void _load_shader(void) {
         "uniform vec2 u_viewport;\n"
         "out vec2 v_uv;\n"
         "void main() {\n"
-        "    vec2 pos = a_position * u_size;\n"
+        "    vec2 pos = u_position + a_position * u_size;\n"
         "    float ndc_x = (pos.x / u_viewport.x) * 2 - 1;\n"
         "    float ndc_y = (pos.y / u_viewport.y) * -2 + 1;\n"
         "    gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);\n"

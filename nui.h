@@ -16,6 +16,7 @@ enum nui_style_flags {
 
 struct nui_element {
     int x, y, w, h;
+    struct { int top, right, bottom, left; } padding;
     struct nui_element *parent;
     struct nui_element **children;
     size_t children_count;
@@ -38,6 +39,7 @@ void nui_fixed(int width, int height);
 void nui_fixed_width(int width);
 void nui_fixed_height(int height);
 void nui_background_color(uint32_t color);
+void nui_padding(int top, int right, int bottom, int left);
 
 void nui_update(void);
 void nui_render(void);

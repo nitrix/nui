@@ -110,6 +110,7 @@ int main(void) {
         NUI {
             nui_fixed(200, 200);
             nui_background_color(0xFF0000FF);
+            nui_padding(10, 10, 10, 10);
 
             NUI {
                 nui_fixed(100, 100);

@@ -142,7 +142,26 @@ void nui_background_color(uint32_t color) {
     ctx.current->style.flags |= NUI_STYLE_FLAG_BACKGROUND_COLOR;
 }
 
+void nui_padding(int top, int right, int bottom, int left) {
+    ctx.current->padding.top = top;
+    ctx.current->padding.right = right;
+    ctx.current->padding.bottom = bottom;
+    ctx.current->padding.left = left;
+}
+
+void _nui_update_element(struct nui_element *el) {
+    if (el->parent) {
+        el->x += el->parent->padding.left;
+        el->y += el->parent->padding.top;
+    }
+
+    for (size_t i = 0; i < el->children_count; i++) {
+        _nui_update_element(el->children[i]);
+    }
+}
+
 void nui_update(void) {
+    _nui_update_element(&ctx.root);
 }
 
 void _nui_render_element(const struct nui_element *el) {
