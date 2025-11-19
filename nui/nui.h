@@ -5,10 +5,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-void nui_init(void);
-void nui_fini(void);
-void nui_frame(void);
-void nui_viewport(int width, int height);
+struct nui_backend {
+    void (*init)(void);
+    void (*fini)(void);
+    void (*prepare)(int width, int height);
+    void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
+};
 
 enum nui_layout {
     NUI_LAYOUT_LEFT_TO_RIGHT,
@@ -23,6 +25,7 @@ struct nui_element {
     int x, y, w, h;
     enum nui_layout layout;
     struct { int top, right, bottom, left; } padding;
+    int child_gap;
     struct nui_element *parent;
     struct nui_element **children;
     size_t children_count;
@@ -32,11 +35,16 @@ struct nui_element {
     } style;
 };
 
+void nui_init(struct nui_backend *backend);
+void nui_fini(void);
+void nui_frame(void);
+void nui_viewport(int width, int height);
+
 void nui_element_begin(struct nui_element *el);
 void nui_element_end(void);
 
 #define NUI_ONCE(before, after) \
-        for (size_t _t ## __LINE__ = 0; (_t ## __LINE__ < 1 && (before, 1), _t ## __LINE__ < 1); (after, _t ## __LINE__++))
+        for (size_t _t ## __LINE__ = 0; (_t ## __LINE__ < 1 ? (before, 1) : 0); (after, _t ## __LINE__++))
 
 #define NUI \
         NUI_ONCE(nui_element_begin(&(struct nui_element) {0}), nui_element_end())
@@ -47,6 +55,7 @@ void nui_fixed_width(int width);
 void nui_fixed_height(int height);
 void nui_background_color(uint32_t color);
 void nui_padding(int top, int right, int bottom, int left);
+void nui_child_gap(int gap);
 
 void nui_update(void);
 void nui_render(void);

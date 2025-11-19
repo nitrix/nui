@@ -4,9 +4,37 @@ project(nui)
 add_subdirectory(vendor/glad)
 add_subdirectory(vendor/glfw)
 
+add_library(nui STATIC nui/nui.c)
+target_include_directories(nui PUBLIC nui)
+
+add_library(backend-ngl STATIC backends/ngl/ngl.c)
+target_include_directories(backend-ngl PUBLIC backends/ngl)
+target_link_libraries(backend-ngl PRIVATE glad)
+target_link_libraries(backend-ngl PUBLIC nui)
+
+add_library(backend-sw STATIC backends/sw/sw.c)
+target_include_directories(backend-sw PUBLIC backends/sw)
+target_link_libraries(backend-sw PUBLIC nui)
+
 add_executable(example main.c)
-target_link_libraries(example nui glad glfw)
+target_link_libraries(example nui backend-ngl glad glfw)
 target_compile_options(example PRIVATE -std=c23 -Wall -Wextra -pedantic)
 
-add_library(nui STATIC nui.c nui.h ngl.c ngl.h)
-target_link_libraries(nui PRIVATE glad)
+enable_testing()
+
+file(GLOB testfiles_fullpath "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.c")
+SET(testfiles_relative)
+
+foreach(name ${testfiles_fullpath})
+    string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/tests/" "" name ${name})
+    SET(testfiles_relative ${testfiles_relative} ${name})
+endforeach()
+
+create_test_sourcelist(testlist test_runner.c ${testfiles_relative})
+add_executable(test_runner test_runner.c ${testfiles_fullpath})
+target_link_libraries(test_runner nui backend-sw)
+
+foreach(name ${testfiles_relative})
+    string(REPLACE ".c" "" name ${name})
+    add_test(NAME ${name} COMMAND test_runner ${name} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+endforeach()

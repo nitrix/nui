@@ -1,5 +1,6 @@
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
+#include "ngl.h"
 #include "nui.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,7 +94,7 @@ int main(void) {
 
     glfwSetFramebufferSizeCallback(window, _on_framebuffer_size);
 
-    nui_init();
+    nui_init(NUI_BACKEND_NGL);
 
     int fb_width, fb_height;
     glfwGetFramebufferSize(window, &fb_width, &fb_height);
@@ -107,24 +108,25 @@ int main(void) {
 
         nui_frame();
 
-        #define RED 0xFF0000FF
-        #define GREEN 0x00FF00FF
-        #define BLUE 0x0000FFFF
+        #define BLUE 0x0a6d89ff
+        #define PINK 0xf1928fff
+        #define YELLOW 0xfed84dff
 
         NUI {
-            nui_fixed(400, 200);
-            nui_background_color(RED);
-            nui_padding(10, 10, 10, 10);
+            nui_fixed(960, 540);
             nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+            nui_background_color(BLUE);
+            nui_padding(32, 32, 32, 32);
+            nui_child_gap(32);
 
             NUI {
-                nui_fixed(100, 100);
-                nui_background_color(GREEN);
+                nui_fixed(300, 300);
+                nui_background_color(PINK);
             }
 
             NUI {
-                nui_fixed(100, 100);
-                nui_background_color(BLUE);
+                nui_fixed(350, 200);
+                nui_background_color(YELLOW);
             }
         }
 

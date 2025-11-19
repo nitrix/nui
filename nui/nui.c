@@ -1,4 +1,3 @@
-#include "ngl.h"
 #include "nui.h"
 #include <assert.h>
 #include <stddef.h>
@@ -18,6 +17,7 @@ static struct {
         void *(*malloc)(size_t size);
         void (*free)(void *ptr);
     } memory;
+    struct nui_backend *backend;
     struct nui_element root;
     struct nui_element *current;
 } ctx;
@@ -77,8 +77,7 @@ void *_arena_realloc(void *old, size_t size) {
     return _arena_realloc(NULL, size);
 }
 
-void nui_init(void) {
-    ngl_init();
+void nui_init(struct nui_backend *backend) {
     ctx.arena.data = NULL;
     ctx.arena.used = 0;
     ctx.arena.capacity = 0;
@@ -87,11 +86,13 @@ void nui_init(void) {
     ctx.root.parent = NULL;
     ctx.root.children = NULL;
     ctx.root.children_count = 0;
+    ctx.backend = backend;
+    ctx.backend->init();
 }
 
 void nui_fini(void) {
-    ngl_fini();
     ctx.memory.free(ctx.arena.data);
+    ctx.backend->fini();
 }
 
 void nui_frame(void) {
@@ -153,6 +154,10 @@ void nui_layout(enum nui_layout layout) {
     ctx.current->layout = layout;
 }
 
+void nui_child_gap(int gap) {
+    ctx.current->child_gap = gap;
+}
+
 void _nui_update_element(struct nui_element *el) {
     for (size_t i = 0; i < el->children_count; i++) {
         _nui_update_element(el->children[i]);
@@ -169,7 +174,7 @@ void _nui_render_element(const struct nui_element *el, int offset_x, int offset_
         color = el->style.background_color;
     }
 
-    ngl_draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
+    ctx.backend->draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
 
     // Padding.
     offset_x += el->padding.left;
@@ -185,11 +190,16 @@ void _nui_render_element(const struct nui_element *el, int offset_x, int offset_
             case NUI_LAYOUT_LEFT_TO_RIGHT: offset_x += child->w; break;
             case NUI_LAYOUT_TOP_TO_BOTTOM: offset_y += child->h; break;
         }
+
+        // Child gap.
+        switch (el->layout) {
+            case NUI_LAYOUT_LEFT_TO_RIGHT: offset_x += el->child_gap; break;
+            case NUI_LAYOUT_TOP_TO_BOTTOM: offset_y += el->child_gap; break;
+        }
     }
 }
 
 void nui_render(void) {
-    ngl_prepare(ctx.root.w, ctx.root.h);
-
+    ctx.backend->prepare(ctx.root.w, ctx.root.h);
     _nui_render_element(&ctx.root, 0, 0);
 }
