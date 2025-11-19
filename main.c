@@ -111,6 +111,7 @@ int main(void) {
         #define BLUE 0x0a6d89ff
         #define PINK 0xf1928fff
         #define YELLOW 0xfed84dff
+        #define LIGHT_BLUE 0x5ecbe4ff
 
         NUI {
             nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
@@ -120,13 +121,19 @@ int main(void) {
             nui_child_gap(32);
 
             NUI {
-                nui_fixed(300, 300);
+                nui_fixed(200, 200);
                 nui_background_color(PINK);
             }
 
             NUI {
-                nui_fixed(350, 200);
+                nui_fixed_width(50);
+                nui_grow_height();
                 nui_background_color(YELLOW);
+            }
+
+            NUI {
+                nui_fixed(200, 200);
+                nui_background_color(LIGHT_BLUE);
             }
         }
 

@@ -146,6 +146,19 @@ void nui_fixed(int width, int height) {
     nui_fixed_height(height);
 }
 
+void nui_grow_width(void) {
+    ctx.current->grow_width = true;
+}
+
+void nui_grow_height(void) {
+    ctx.current->grow_height = true;
+}
+
+void nui_grow(void) {
+    nui_grow_width();
+    nui_grow_height();
+}
+
 void nui_background_color(uint32_t color) {
     ctx.current->style.background_color = color;
     ctx.current->style.flags |= NUI_STYLE_FLAG_BACKGROUND_COLOR;
@@ -166,10 +179,10 @@ void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
 
-void _nui_sizing_pass_element(struct nui_element *el) {
+void _nui_fit_sizing_pass_element(struct nui_element *el) {
     for (size_t i = 0; i < el->children_count; i++) {
         struct nui_element *child = el->children[i];
-        _nui_sizing_pass_element(child);
+        _nui_fit_sizing_pass_element(child);
     }
 
     if (el->fixed.width > 0) el->w = el->fixed.width;
@@ -221,6 +234,13 @@ void _nui_sizing_pass_element(struct nui_element *el) {
     }
 }
 
+void _nui_grow_sizing_pass_element(struct nui_element *el) {
+    for (size_t i = 0; i < el->children_count; i++) {
+        struct nui_element *child = el->children[i];
+        _nui_grow_sizing_pass_element(child);
+    }
+}
+
 void _nui_positioning_pass_element(struct nui_element *el) {
     for (size_t i = 0; i < el->children_count; i++) {
         struct nui_element *child = el->children[i];
@@ -230,7 +250,8 @@ void _nui_positioning_pass_element(struct nui_element *el) {
 
 void nui_update(void) {
     // Order is VERY important.
-    _nui_sizing_pass_element(&ctx.root);
+    _nui_fit_sizing_pass_element(&ctx.root);
+    _nui_grow_sizing_pass_element(&ctx.root);
     _nui_positioning_pass_element(&ctx.root);
 }
 

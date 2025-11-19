@@ -18,6 +18,7 @@ struct nui_element {
     int x, y, w, h; // px
     struct { int width, height; } fixed; // px
     struct { int top, right, bottom, left; } padding; // px
+    bool grow_width, grow_height;
     int child_gap; // px
     enum nui_layout layout;
     struct nui_element *parent;
@@ -60,6 +61,9 @@ void nui_layout(enum nui_layout layout);
 void nui_fixed(int width, int height);
 void nui_fixed_width(int width);
 void nui_fixed_height(int height);
+void nui_grow_width(void);
+void nui_grow_height(void);
+void nui_grow(void);
 void nui_padding(int top, int right, int bottom, int left);
 void nui_child_gap(int gap);
 
