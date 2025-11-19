@@ -8,7 +8,7 @@ A UI library.
 
 ## Status
 
-This is a work in progress and not ready to be used.
+Work-in-progress; not ready to be used.
 
 ## Documentation
 
