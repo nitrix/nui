@@ -6,9 +6,13 @@ A UI library.
 
 ![](tests/expected/simple_child_gap.png)
 
+## Status
+
+This is a work in progress and not ready to be used.
 
 ## Documentation
 
+* [Library usage](docs/library-usage.md)
 * [Simple examples](docs/simple-examples.md)
 
 ## License

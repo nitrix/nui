@@ -106,6 +106,11 @@ void nui_viewport(int width, int height) {
     ctx.root.h = height;
 }
 
+void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr)) {
+    ctx.memory.malloc = custom_malloc;
+    ctx.memory.free = custom_free;
+}
+
 void nui_element_begin(struct nui_element *el) {
     assert(el);
 

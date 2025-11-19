@@ -39,6 +39,7 @@ void nui_init(struct nui_backend *backend);
 void nui_fini(void);
 void nui_frame(void);
 void nui_viewport(int width, int height);
+void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr));
 
 void nui_element_begin(struct nui_element *el);
 void nui_element_end(void);
