@@ -21,7 +21,7 @@ void sw_prepare(int width, int height) {
 }
 
 void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
-    printf("sw_draw_rect: x=%d, y=%d, width=%d, height=%d, color=0x%08x\n", x, y, width, height, color);
+    // printf("sw_draw_rect: x=%d, y=%d, width=%d, height=%d, color=0x%08x\n", x, y, width, height, color);
 
     if (x + width > max_x || y + height > max_y) {
         int new_max_x = x + width;
@@ -89,6 +89,5 @@ void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
 }
 
 void sw_export(const char *filepath) {
-    printf("exporting size %dx%d to %s\n", max_x, max_y, filepath);
     stbi_write_png(filepath, max_x, max_y, 4, pixels, max_x * sizeof (uint32_t));
 }

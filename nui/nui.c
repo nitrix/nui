@@ -135,12 +135,10 @@ void nui_element_end(void) {
 
 void nui_fixed_width(int width) {
     ctx.current->fixed.width = width;
-    ctx.current->w = width;
 }
 
 void nui_fixed_height(int height) {
     ctx.current->fixed.height = height;
-    ctx.current->h = height;
 }
 
 void nui_fixed(int width, int height) {
@@ -168,54 +166,72 @@ void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
 
-void _nui_layout_pass_element(struct nui_element *el) {
+void _nui_sizing_pass_element(struct nui_element *el) {
     for (size_t i = 0; i < el->children_count; i++) {
         struct nui_element *child = el->children[i];
-        _nui_layout_pass_element(child);
+        _nui_sizing_pass_element(child);
     }
 
-    bool fit = (el->fixed.width == 0 && el->fixed.height == 0);
+    if (el->fixed.width > 0) el->w = el->fixed.width;
+    if (el->fixed.height > 0) el->h = el->fixed.height;
 
-    if (fit) {
+    bool fit_width = el->fixed.width == 0;
+    bool fit_height = el->fixed.height == 0;
+
+    if (fit_width) {
         // Children sizes.
         for (size_t i = 0; i < el->children_count; i++) {
             struct nui_element *child = el->children[i];
             switch (el->layout) {
-                case NUI_LAYOUT_LEFT_TO_RIGHT:
-                    {
-                        el->w += child->w;
-                        el->h = MAX(el->h, child->h);
-                    } break;
-                case NUI_LAYOUT_TOP_TO_BOTTOM:
-                    {
-                        el->h += child->h;
-                        el->w = MAX(el->w, child->w);
-                    }
-                    break;
+                case NUI_LAYOUT_LEFT_TO_RIGHT: el->w += child->w; break;
+                case NUI_LAYOUT_TOP_TO_BOTTOM: el->w = MAX(el->w, child->w); break;
             }
         }
 
         // Padding.
         el->w += el->padding.left + el->padding.right;
+
+        // Gaps.
+        if (el->children_count > 0) {
+            if (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) {
+                el->w += el->child_gap * (el->children_count - 1);
+            }
+        }
+    }
+
+    if (fit_height) {
+        // Children sizes.
+        for (size_t i = 0; i < el->children_count; i++) {
+            struct nui_element *child = el->children[i];
+            switch (el->layout) {
+                case NUI_LAYOUT_LEFT_TO_RIGHT: el->h = MAX(el->h, child->h); break;
+                case NUI_LAYOUT_TOP_TO_BOTTOM: el->h += child->h; break;
+            }
+        }
+
+        // Padding.
         el->h += el->padding.top + el->padding.bottom;
 
         // Gaps.
         if (el->children_count > 0) {
-            switch (el->layout) {
-                case NUI_LAYOUT_LEFT_TO_RIGHT:
-                    el->w += el->child_gap * (el->children_count - 1);
-                    break;
-                case NUI_LAYOUT_TOP_TO_BOTTOM:
-                    el->h += el->child_gap * (el->children_count - 1);
-                    break;
+            if (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) {
+                el->h += el->child_gap * (el->children_count - 1);
             }
         }
     }
 }
 
+void _nui_positioning_pass_element(struct nui_element *el) {
+    for (size_t i = 0; i < el->children_count; i++) {
+        struct nui_element *child = el->children[i];
+        _nui_positioning_pass_element(child);
+    }
+}
+
 void nui_update(void) {
-    // Layout pass.
-    _nui_layout_pass_element(&ctx.root);
+    // Order is VERY important.
+    _nui_sizing_pass_element(&ctx.root);
+    _nui_positioning_pass_element(&ctx.root);
 }
 
 void _nui_render_element(const struct nui_element *el, int offset_x, int offset_y) {

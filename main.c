@@ -114,6 +114,7 @@ int main(void) {
 
         NUI {
             nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+            nui_fixed_width(1200);
             nui_background_color(BLUE);
             nui_padding(32, 32, 32, 32);
             nui_child_gap(32);
@@ -131,13 +132,6 @@ int main(void) {
 
         nui_update();
         nui_render();
-
-        //// Example NUI usage
-        // nui_window_begin(&ctx, "Hello, NUI!", 50, 50, 300, 200);
-        // nui_text(&ctx, "This is a simple NUI example.");
-        // nui_button(&ctx, "Click Me");
-        // nui_window_end(&ctx);
-        // nui_end_frame(&ctx);
 
         glfwSwapBuffers(window);
     }
