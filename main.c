@@ -113,8 +113,7 @@ int main(void) {
         #define YELLOW 0xfed84dff
 
         NUI {
-            nui_fixed(960, 540);
-            nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+            nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
             nui_background_color(BLUE);
             nui_padding(32, 32, 32, 32);
             nui_child_gap(32);

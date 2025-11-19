@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+
 static struct {
     struct {
         char *data;
@@ -102,8 +104,9 @@ void nui_frame(void) {
 }
 
 void nui_viewport(int width, int height) {
-    ctx.root.w = width;
-    ctx.root.h = height;
+    ctx.current = &ctx.root;
+    nui_fixed(width, height);
+    ctx.current = NULL;
 }
 
 void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr)) {
@@ -131,10 +134,12 @@ void nui_element_end(void) {
 }
 
 void nui_fixed_width(int width) {
+    ctx.current->fixed.width = width;
     ctx.current->w = width;
 }
 
 void nui_fixed_height(int height) {
+    ctx.current->fixed.height = height;
     ctx.current->h = height;
 }
 
@@ -163,14 +168,54 @@ void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
 
-void _nui_update_element(struct nui_element *el) {
+void _nui_layout_pass_element(struct nui_element *el) {
     for (size_t i = 0; i < el->children_count; i++) {
-        _nui_update_element(el->children[i]);
+        struct nui_element *child = el->children[i];
+        _nui_layout_pass_element(child);
+    }
+
+    bool fit = (el->fixed.width == 0 && el->fixed.height == 0);
+
+    if (fit) {
+        // Children sizes.
+        for (size_t i = 0; i < el->children_count; i++) {
+            struct nui_element *child = el->children[i];
+            switch (el->layout) {
+                case NUI_LAYOUT_LEFT_TO_RIGHT:
+                    {
+                        el->w += child->w;
+                        el->h = MAX(el->h, child->h);
+                    } break;
+                case NUI_LAYOUT_TOP_TO_BOTTOM:
+                    {
+                        el->h += child->h;
+                        el->w = MAX(el->w, child->w);
+                    }
+                    break;
+            }
+        }
+
+        // Padding.
+        el->w += el->padding.left + el->padding.right;
+        el->h += el->padding.top + el->padding.bottom;
+
+        // Gaps.
+        if (el->children_count > 0) {
+            switch (el->layout) {
+                case NUI_LAYOUT_LEFT_TO_RIGHT:
+                    el->w += el->child_gap * (el->children_count - 1);
+                    break;
+                case NUI_LAYOUT_TOP_TO_BOTTOM:
+                    el->h += el->child_gap * (el->children_count - 1);
+                    break;
+            }
+        }
     }
 }
 
 void nui_update(void) {
-    _nui_update_element(&ctx.root);
+    // Layout pass.
+    _nui_layout_pass_element(&ctx.root);
 }
 
 void _nui_render_element(const struct nui_element *el, int offset_x, int offset_y) {

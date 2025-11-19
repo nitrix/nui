@@ -64,7 +64,7 @@ NUI {
 
 ## Simple layout (left-to-right)
 
-Two children this time (pink and yellow), side-by-side horizontally because the parent defaults to left-to-right layout (`UI_LAYOUT_LEFT_TO_RIGHT`).
+Two children this time (pink and yellow), side-by-side horizontally because the parent defaults to left-to-right layout (`NUI_LAYOUT_LEFT_TO_RIGHT`).
 
 ![](../tests/expected/simple_layout_left2right.png)
 
@@ -136,4 +136,54 @@ NUI {
         nui_background_color(YELLOW);
     }
 }
+```
+
+## Simple fit sizing (left-to-right)
+
+By default, elements have a "fit" sizing and will correctly size themselves according to the children their contain (in the direction of their layout).
+
+![](../tests/expected/simple_fit_left2right.png)
+
+```c
+    NUI {
+        nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_background_color(BLUE);
+        nui_padding(32, 32, 32, 32);
+        nui_child_gap(32);
+
+        NUI {
+            nui_fixed(300, 300);
+            nui_background_color(PINK);
+        }
+
+        NUI {
+            nui_fixed(350, 200);
+            nui_background_color(YELLOW);
+        }
+    }
+```
+
+## Simple fit sizing (right-to-bottom)
+
+Same thing a above to demonstrate right-to-bottom.
+
+![](../tests/expected/simple_fit_top2bottom.png)
+
+```c
+    NUI {
+        nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_background_color(BLUE);
+        nui_padding(32, 32, 32, 32);
+        nui_child_gap(32);
+
+        NUI {
+            nui_fixed(300, 300);
+            nui_background_color(PINK);
+        }
+
+        NUI {
+            nui_fixed(350, 200);
+            nui_background_color(YELLOW);
+        }
+    }
 ```
