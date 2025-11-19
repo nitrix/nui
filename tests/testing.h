@@ -11,6 +11,7 @@
 #define BLUE 0x0a6d89ff
 #define PINK 0xf1928fff
 #define YELLOW 0xfed84dff
+#define LIGHT_BLUE 0x5ecbe4ff
 
 static char output_filepath[2048];
 static char expected_filepath[2048];

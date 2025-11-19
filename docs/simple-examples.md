@@ -8,6 +8,7 @@ For the purpose of these examples, the following color constants were defined.
 #define BLUE 0x0a6d89ff
 #define PINK 0xf1928fff
 #define YELLOW 0xfed84dff
+#define LIGHT_BLUE 0x5ecbe4ff
 ```
 
 ## Simple element

@@ -234,7 +234,120 @@ void _nui_fit_sizing_pass_element(struct nui_element *el) {
     }
 }
 
+void _nui_find_smallest_growable_along_children(struct nui_element *el, struct nui_element **first_smallest, struct nui_element **second_smallest) {
+    *first_smallest = NULL;
+    *second_smallest = NULL;
+
+    for (size_t i = 0; i < el->children_count; i++) {
+        struct nui_element *child = el->children[i];
+
+        bool growing_along_axis = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT ? child->grow_width : child->grow_height;
+
+        if (!growing_along_axis) {
+            continue;
+        }
+
+        if (*first_smallest == NULL) {
+            *first_smallest = child;
+            continue;
+        }
+
+        bool smaller_than_first = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT ? (child->w < (*first_smallest)->w) : (child->h < (*first_smallest)->h);
+
+        if (smaller_than_first) {
+            *second_smallest = *first_smallest;
+            *first_smallest = child;
+            continue;
+        }
+
+        if (*second_smallest == NULL) {
+            *second_smallest = child;
+            continue;
+        }
+
+        bool smaller_than_second = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT ? (child->w < (*second_smallest)->w) : (child->h < (*second_smallest)->h);
+
+        if (smaller_than_second) {
+            *second_smallest = child;
+            continue;
+        }
+    }
+}
+
 void _nui_grow_sizing_pass_element(struct nui_element *el) {
+    bool xaxis = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT;
+
+    int remaining_along = xaxis ? el->w : el->h;
+    int remaining_across = xaxis ? el->h : el->w;
+
+    // Children sizes.
+    for (size_t i = 0; i < el->children_count; i++) {
+        struct nui_element *child = el->children[i];
+        remaining_along -= xaxis ? child->w : child->h;
+    }
+
+    // Padding.
+    if (xaxis) {
+        remaining_along -= (el->padding.left + el->padding.right);
+        remaining_across -= (el->padding.top + el->padding.bottom);
+    } else {
+        remaining_along -= (el->padding.top + el->padding.bottom);
+        remaining_across -= (el->padding.left + el->padding.right);
+    }
+
+    // Gaps.
+    if (el->children_count > 0) {
+        remaining_along -= el->child_gap * (el->children_count - 1);
+    }
+
+    // Distribute remaining space along the layout axis.
+    while (remaining_along > 0) {
+        // Find the smallest and next smallest growable element.
+        struct nui_element *first_smallest = NULL;
+        struct nui_element *second_smallest = NULL;
+        _nui_find_smallest_growable_along_children(el, &first_smallest, &second_smallest);
+
+        if (first_smallest != NULL && second_smallest != NULL) {
+            int diff = xaxis ? (second_smallest->w - first_smallest->w) : (second_smallest->h - first_smallest->h);
+            int give = diff < remaining_along ? diff : remaining_along;
+            if (xaxis) {
+                first_smallest->w += give;
+            } else {
+                first_smallest->h += give;
+            }
+            remaining_along -= give;
+        } else if (first_smallest != NULL) {
+            if (xaxis) {
+                first_smallest->w += remaining_along;
+            } else {
+                first_smallest->h += remaining_along;
+            }
+            remaining_along = 0;
+        } else {
+            // No more growable children.
+            break;
+        }
+    }
+
+    // Distribute remaining space across the layout axis.
+    for (size_t i = 0; i < el->children_count; i++) {
+        struct nui_element *child = el->children[i];
+
+        bool growing_across = xaxis ? child->grow_height : child->grow_width;
+        if (!growing_across) {
+            continue;
+        }
+
+        remaining_across -= xaxis ? child->h : child->w;
+
+        if (xaxis) {
+            child->h += remaining_across;
+        } else {
+            child->w += remaining_across;
+        }
+    }
+
+    // Recursively.
     for (size_t i = 0; i < el->children_count; i++) {
         struct nui_element *child = el->children[i];
         _nui_grow_sizing_pass_element(child);

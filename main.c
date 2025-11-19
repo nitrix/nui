@@ -127,6 +127,7 @@ int main(void) {
 
             NUI {
                 nui_fixed_width(50);
+                nui_grow_width();
                 nui_grow_height();
                 nui_background_color(YELLOW);
             }
