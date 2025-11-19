@@ -4,7 +4,7 @@ A UI library.
 
 ## Preview
 
-![](tests/expected/simple_child_gap.png)
+![](tests/expected/simple_fit_left2right.png)
 
 ## Status
 
