@@ -402,12 +402,12 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
             continue;
         }
 
-        remaining_across -= xaxis ? child->h : child->w;
+        int element_size_across = xaxis ? child->h : child->w;
 
         if (xaxis) {
-            child->h += remaining_across;
+            child->h += remaining_across - element_size_across;
         } else {
-            child->w += remaining_across;
+            child->w += remaining_across - element_size_across;
         }
     }
 

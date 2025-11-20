@@ -123,21 +123,8 @@ int main(void) {
 
             NUI {
                 nui_fixed(200, 200);
+                nui_grow_height();
                 nui_background_color(PINK);
-            }
-
-            NUI {
-                nui_fixed_width(50);
-                nui_grow_height();
-                nui_grow_width();
-                nui_background_color(YELLOW);
-            }
-
-            NUI {
-                nui_fixed_width(50);
-                nui_grow_height();
-                nui_grow_width();
-                nui_background_color(YELLOW);
             }
 
             NUI {
@@ -149,6 +136,7 @@ int main(void) {
 
             NUI {
                 nui_fixed(200, 200);
+                nui_grow_height();
                 nui_background_color(LIGHT_BLUE);
             }
         }
