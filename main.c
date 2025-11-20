@@ -116,6 +116,7 @@ int main(void) {
         NUI {
             nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
             nui_fixed_width(1200);
+            nui_fixed_height(350);
             nui_background_color(BLUE);
             nui_padding(32, 32, 32, 32);
             nui_child_gap(32);
@@ -127,8 +128,22 @@ int main(void) {
 
             NUI {
                 nui_fixed_width(50);
-                nui_grow_width();
                 nui_grow_height();
+                nui_grow_width();
+                nui_background_color(YELLOW);
+            }
+
+            NUI {
+                nui_fixed_width(50);
+                nui_grow_height();
+                nui_grow_width();
+                nui_background_color(YELLOW);
+            }
+
+            NUI {
+                nui_fixed_width(10);
+                nui_grow_height();
+                nui_grow_width();
                 nui_background_color(YELLOW);
             }
 

@@ -6,6 +6,7 @@
 #include <string.h>
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 static struct {
     struct {
@@ -309,13 +310,76 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
 
         if (first_smallest != NULL && second_smallest != NULL) {
             int diff = xaxis ? (second_smallest->w - first_smallest->w) : (second_smallest->h - first_smallest->h);
-            int give = diff < remaining_along ? diff : remaining_along;
-            if (xaxis) {
-                first_smallest->w += give;
+            if (diff > 0) {
+                int give = MIN(diff, remaining_along);
+                if (xaxis) {
+                    first_smallest->w += give;
+                } else {
+                    first_smallest->h += give;
+                }
+                remaining_along -= give;
             } else {
-                first_smallest->h += give;
+                size_t target_size = xaxis ? first_smallest->w : first_smallest->h;
+
+                // Count how many have the same size.
+                size_t peers_count = 0;
+                for (size_t i = 0; i < el->children_count; i++) {
+                    struct nui_element *child = el->children[i];
+
+                    bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
+                    if (!growing_along_axis) {
+                        continue;
+                    }
+
+                    bool same_size = xaxis ? (child->w == target_size) : (child->h == target_size);
+                    if (same_size) {
+                        peers_count++;
+                    }
+                }
+
+                int give = MIN(remaining_along / (int) peers_count, remaining_along);
+
+                for (size_t i = 0; i < el->children_count; i++) {
+                    struct nui_element *child = el->children[i];
+
+                    bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
+                    if (!growing_along_axis) {
+                        continue;
+                    }
+
+                    bool same_size = xaxis ? (child->w == target_size) : (child->h == target_size);
+                    if (same_size) {
+                        if (xaxis) {
+                            child->w += give;
+                        } else {
+                            child->h += give;
+                        }
+                        remaining_along -= give;
+                    }
+                }
+
+                // Unfair leftover.
+                if (remaining_along < (int) peers_count) {
+                    for (size_t i = 0; i < el->children_count && remaining_along > 0; i++) {
+                        struct nui_element *child = el->children[i];
+
+                        bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
+                        if (!growing_along_axis) {
+                            continue;
+                        }
+
+                        bool same_size = xaxis ? (child->w == target_size) : (child->h == target_size);
+                        if (same_size) {
+                            if (xaxis) {
+                                child->w++;
+                            } else {
+                                child->h++;
+                            }
+                            remaining_along--;
+                        }
+                    }
+                }
             }
-            remaining_along -= give;
         } else if (first_smallest != NULL) {
             if (xaxis) {
                 first_smallest->w += remaining_along;
