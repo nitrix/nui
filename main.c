@@ -41,6 +41,46 @@ static void _debug(GLenum source, GLenum type, unsigned int id, GLenum severity,
     fprintf(stderr, "[OpenGL debug] source: %d, type: %d, id: %d, severity: %d, message: %s\n", source, type, id, severity, message);
 }
 
+void _example(void) {
+    nui_frame();
+
+    #define BLUE 0x0a6d89ff
+    #define PINK 0xf1928fff
+    #define YELLOW 0xfed84dff
+    #define LIGHT_BLUE 0x5ecbe4ff
+
+    NUI {
+        nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_grow_width();
+        nui_grow_height();
+        nui_background_color(BLUE);
+        nui_padding(32, 32, 32, 32);
+        nui_child_gap(32);
+
+        NUI {
+            nui_fixed(200, 200);
+            nui_grow_height();
+            nui_background_color(PINK);
+        }
+
+        NUI {
+            nui_fixed_width(10);
+            nui_grow_height();
+            nui_grow_width();
+            nui_background_color(YELLOW);
+        }
+
+        NUI {
+            nui_fixed(200, 200);
+            nui_grow_height();
+            nui_background_color(LIGHT_BLUE);
+        }
+    }
+
+    nui_update();
+    nui_render();
+}
+
 int main(void) {
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
@@ -106,43 +146,7 @@ int main(void) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        nui_frame();
-
-        #define BLUE 0x0a6d89ff
-        #define PINK 0xf1928fff
-        #define YELLOW 0xfed84dff
-        #define LIGHT_BLUE 0x5ecbe4ff
-
-        NUI {
-            nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
-            nui_fixed_width(1200);
-            nui_fixed_height(350);
-            nui_background_color(BLUE);
-            nui_padding(32, 32, 32, 32);
-            nui_child_gap(32);
-
-            NUI {
-                nui_fixed(200, 200);
-                nui_grow_height();
-                nui_background_color(PINK);
-            }
-
-            NUI {
-                nui_fixed_width(10);
-                nui_grow_height();
-                nui_grow_width();
-                nui_background_color(YELLOW);
-            }
-
-            NUI {
-                nui_fixed(200, 200);
-                nui_grow_height();
-                nui_background_color(LIGHT_BLUE);
-            }
-        }
-
-        nui_update();
-        nui_render();
+        _example();
 
         glfwSwapBuffers(window);
     }
