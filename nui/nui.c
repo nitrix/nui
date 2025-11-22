@@ -10,12 +10,10 @@
 
 static struct {
     struct {
-        char *data;
-        size_t used;
-        size_t capacity;
-        void *last_ptr;
-        size_t last_size;
-    } arena;
+        struct nui_element *active_elements_first;
+        struct nui_element *active_elements_last;
+        struct nui_element *inactive_elements_first;
+    } pool;
     struct {
         void *(*malloc)(size_t size);
         void (*free)(void *ptr);
@@ -25,83 +23,71 @@ static struct {
     struct nui_element *current;
 } ctx;
 
-void *_arena_realloc(void *old, size_t size) {
-    // Round up to nearest multiple of the largest alignment requirement.
-    size_t alignment = sizeof (max_align_t);
-    size_t aligned_size = (size + alignment - 1) & ~(alignment - 1);
-
-    // Brand new allocation.
-    if (old == NULL) {
-        if (aligned_size > ctx.arena.capacity) {
-            size_t new_capacity = ctx.arena.capacity == 0 ? 1024 : ctx.arena.capacity;
-            while (new_capacity < aligned_size) {
-                new_capacity *= 2;
-            }
-            char *new_data = ctx.memory.malloc(new_capacity);
-            if (ctx.arena.data) {
-                memcpy(new_data, ctx.arena.data, ctx.arena.used);
-                ctx.memory.free(ctx.arena.data);
-            }
-            ctx.arena.data = new_data;
-            ctx.arena.capacity = new_capacity;
+struct nui_element *_new_element(void) {
+    if (ctx.pool.inactive_elements_first) {
+        struct nui_element *el = ctx.pool.inactive_elements_first;
+        ctx.pool.inactive_elements_first = el->pool_next;
+        memset(el, 0, sizeof *el);
+        el->pool_next = ctx.pool.active_elements_first;
+        ctx.pool.active_elements_first = el;
+        if (!ctx.pool.active_elements_last) {
+            ctx.pool.active_elements_last = el;
         }
-
-        void *new = ctx.arena.data + ctx.arena.used;
-
-        ctx.arena.used += aligned_size;
-        ctx.arena.last_ptr = new;
-        ctx.arena.last_size = size;
-
-        return new;
+        return el;
     }
 
-    // Reallocation of the most recent allocation.
-    if (old == ctx.arena.last_ptr) {
-        // Pretend the old allocation is gone.
-        ctx.arena.used = (char *) old - ctx.arena.data;
-
-        // Keep the old data for the size that we do share in common.
-        size_t copy_size = size < ctx.arena.last_size ? size : ctx.arena.last_size;
-        ctx.arena.used += copy_size;
-
-        // Allocate for the remaining size.
-        size_t remaining_size = size > copy_size ? size - copy_size : 0;
-        if (remaining_size) {
-            _arena_realloc(NULL, remaining_size);
-        }
-
-        ctx.arena.last_ptr = old;
-        ctx.arena.last_size = size;
-
-        return old;
+    struct nui_element *el = ctx.memory.malloc(sizeof *el);
+    memset(el, 0, sizeof *el);
+    el->pool_next = ctx.pool.active_elements_first;
+    ctx.pool.active_elements_first = el;
+    if (!ctx.pool.active_elements_last) {
+        ctx.pool.active_elements_last = el;
     }
 
-    // Reallocation of an older allocation: abandon it and make a new one.
-    return _arena_realloc(NULL, size);
+    return el;
 }
 
 void nui_init(struct nui_backend *backend) {
-    ctx.arena.data = NULL;
-    ctx.arena.used = 0;
-    ctx.arena.capacity = 0;
+    ctx.pool.active_elements_first = NULL;
+    ctx.pool.active_elements_last = NULL;
+    ctx.pool.inactive_elements_first = NULL;
     ctx.memory.malloc = malloc;
     ctx.memory.free = free;
     ctx.root.parent = NULL;
-    ctx.root.children = NULL;
+    ctx.root.first_child = NULL;
+    ctx.root.last_child = NULL;
     ctx.root.children_count = 0;
     ctx.backend = backend;
     ctx.backend->init();
 }
 
 void nui_fini(void) {
-    ctx.memory.free(ctx.arena.data);
+    for (struct nui_element *el = ctx.pool.active_elements_first; el != NULL; ) {
+        struct nui_element *next = el->pool_next;
+        ctx.memory.free(el);
+        el = next;
+    }
+
+    for (struct nui_element *el = ctx.pool.inactive_elements_first; el != NULL; ) {
+        struct nui_element *next = el->pool_next;
+        ctx.memory.free(el);
+        el = next;
+    }
+
     ctx.backend->fini();
 }
 
 void nui_frame(void) {
-    ctx.arena.used = 0;
-    ctx.root.children = NULL;
+    ctx.root.first_child = NULL;
+    ctx.root.last_child = NULL;
     ctx.root.children_count = 0;
+
+    if (ctx.pool.active_elements_last) {
+        ctx.pool.active_elements_last->pool_next = ctx.pool.inactive_elements_first;
+        ctx.pool.inactive_elements_first = ctx.pool.active_elements_first;
+        ctx.pool.active_elements_first = NULL;
+        ctx.pool.active_elements_last = NULL;
+    }
 }
 
 void nui_viewport(int width, int height) {
@@ -115,22 +101,27 @@ void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(
     ctx.memory.free = custom_free;
 }
 
-void nui_element_begin(struct nui_element *el) {
-    assert(el);
+void nui_element_begin(void) {
+    struct nui_element *el = _new_element();
 
     el->parent = ctx.current;
     ctx.current = el;
 
     struct nui_element *target = (el->parent ? el->parent : &ctx.root);
 
-    target->children = _arena_realloc(target->children, sizeof target->children_count + 1);
-    target->children[target->children_count] = el;
+    if (target->last_child) {
+        target->last_child->next = el;
+        target->last_child = el;
+    } else {
+        target->first_child = el;
+        target->last_child = el;
+    }
+
     target->children_count++;
 }
 
 void nui_element_end(void) {
     assert(ctx.current);
-
     ctx.current = ctx.current->parent;
 }
 
@@ -181,8 +172,7 @@ void nui_child_gap(int gap) {
 }
 
 void _nui_fit_sizing_pass_element(struct nui_element *el) {
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_fit_sizing_pass_element(child);
     }
 
@@ -194,8 +184,7 @@ void _nui_fit_sizing_pass_element(struct nui_element *el) {
 
     if (fit_width) {
         // Children sizes.
-        for (size_t i = 0; i < el->children_count; i++) {
-            struct nui_element *child = el->children[i];
+        for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
             switch (el->layout) {
                 case NUI_LAYOUT_LEFT_TO_RIGHT: el->w += child->w; break;
                 case NUI_LAYOUT_TOP_TO_BOTTOM: el->w = MAX(el->w, child->w); break;
@@ -215,8 +204,7 @@ void _nui_fit_sizing_pass_element(struct nui_element *el) {
 
     if (fit_height) {
         // Children sizes.
-        for (size_t i = 0; i < el->children_count; i++) {
-            struct nui_element *child = el->children[i];
+        for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
             switch (el->layout) {
                 case NUI_LAYOUT_LEFT_TO_RIGHT: el->h = MAX(el->h, child->h); break;
                 case NUI_LAYOUT_TOP_TO_BOTTOM: el->h += child->h; break;
@@ -239,9 +227,7 @@ void _nui_find_smallest_growable_along_children(struct nui_element *el, struct n
     *first_smallest = NULL;
     *second_smallest = NULL;
 
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
-
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         bool growing_along_axis = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT ? child->grow_width : child->grow_height;
 
         if (!growing_along_axis) {
@@ -282,8 +268,7 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
     int remaining_across = xaxis ? el->h : el->w;
 
     // Children sizes.
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         remaining_along -= xaxis ? child->w : child->h;
     }
 
@@ -323,9 +308,7 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
 
                 // Count how many have the same size.
                 size_t peers_count = 0;
-                for (size_t i = 0; i < el->children_count; i++) {
-                    struct nui_element *child = el->children[i];
-
+                for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
                     bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
                     if (!growing_along_axis) {
                         continue;
@@ -339,9 +322,7 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
 
                 int give = MIN(remaining_along / (int) peers_count, remaining_along);
 
-                for (size_t i = 0; i < el->children_count; i++) {
-                    struct nui_element *child = el->children[i];
-
+                for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
                     bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
                     if (!growing_along_axis) {
                         continue;
@@ -360,8 +341,10 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
 
                 // Unfair leftover.
                 if (remaining_along < (int) peers_count) {
-                    for (size_t i = 0; i < el->children_count && remaining_along > 0; i++) {
-                        struct nui_element *child = el->children[i];
+                    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+                        if (remaining_along <= 0) {
+                            break;
+                        }
 
                         bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
                         if (!growing_along_axis) {
@@ -394,9 +377,7 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
     }
 
     // Distribute remaining space across the layout axis.
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
-
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         bool growing_across = xaxis ? child->grow_height : child->grow_width;
         if (!growing_across) {
             continue;
@@ -412,15 +393,13 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
     }
 
     // Recursively.
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_grow_sizing_pass_element(child);
     }
 }
 
 void _nui_positioning_pass_element(struct nui_element *el) {
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_positioning_pass_element(child);
     }
 }
@@ -444,9 +423,7 @@ void _nui_render_element(const struct nui_element *el, int offset_x, int offset_
     offset_x += el->padding.left;
     offset_y += el->padding.top;
 
-    for (size_t i = 0; i < el->children_count; i++) {
-        struct nui_element *child = el->children[i];
-
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_render_element(child, offset_x, offset_y);
 
         // Layout.

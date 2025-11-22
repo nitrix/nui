@@ -22,7 +22,10 @@ struct nui_element {
     int child_gap; // px
     enum nui_layout layout;
     struct nui_element *parent;
-    struct nui_element **children;
+    struct nui_element *first_child;
+    struct nui_element *last_child;
+    struct nui_element *next;
+    struct nui_element *pool_next;
     size_t children_count;
     struct {
         uint32_t flags; // enum nui_style_flags
@@ -51,10 +54,10 @@ void nui_render(void);
 void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr));
 
 // Elements.
-void nui_element_begin(struct nui_element *el);
+void nui_element_begin(void);
 void nui_element_end(void);
 #define NUI_ONCE(before, after) for (size_t _t ## __LINE__ = 0; (_t ## __LINE__ < 1 ? (before, 1) : 0); (after, _t ## __LINE__++))
-#define NUI NUI_ONCE(nui_element_begin(&(struct nui_element) {0}), nui_element_end())
+#define NUI NUI_ONCE(nui_element_begin(), nui_element_end())
 
 // Sizing and layout.
 void nui_layout(enum nui_layout layout);

@@ -50,30 +50,17 @@ void _example(void) {
     #define LIGHT_BLUE 0x5ecbe4ff
 
     NUI {
-        nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
-        nui_grow_width();
-        nui_grow_height();
+        nui_fixed_width(1200);
         nui_background_color(BLUE);
         nui_padding(32, 32, 32, 32);
-        nui_child_gap(32);
+        nui_child_gap(2);
 
-        NUI {
-            nui_fixed(200, 200);
-            nui_grow_height();
-            nui_background_color(PINK);
-        }
-
-        NUI {
-            nui_fixed_width(10);
-            nui_grow_height();
-            nui_grow_width();
-            nui_background_color(YELLOW);
-        }
-
-        NUI {
-            nui_fixed(200, 200);
-            nui_grow_height();
-            nui_background_color(LIGHT_BLUE);
+        for (size_t i = 0; i < 100; i++) {
+            NUI {
+                nui_fixed_height(100);
+                nui_grow_width();
+                nui_background_color(PINK);
+            }
         }
     }
 
