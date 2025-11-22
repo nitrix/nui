@@ -10,27 +10,36 @@ enum nui_layout {
     NUI_LAYOUT_TOP_TO_BOTTOM,
 };
 
-enum nui_style_flags {
-    NUI_STYLE_FLAG_BACKGROUND_COLOR = 1,
+enum nui_element_flags {
+    NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR = 1,
+    NUI_ELEMENT_FLAG_GROW_WIDTH = 2,
+    NUI_ELEMENT_FLAG_GROW_HEIGHT = 4,
 };
 
 struct nui_element {
-    int x, y, w, h; // px
+    // User-defined properties.
+    enum nui_layout layout;
     struct { int width, height; } fixed; // px
     struct { int top, right, bottom, left; } padding; // px
-    bool grow_width, grow_height;
+    struct { int top, right, bottom, left; } margin; // px
     int child_gap; // px
-    enum nui_layout layout;
+    uint32_t flags; // See enum nui_element_flags.
+    struct {
+        uint32_t background_color; // RGBA8888
+    } style;
+
+    // Position and size which gets computed during the update phase.
+    int x, y, w, h; // px
+
+    // Hierarchy.
     struct nui_element *parent;
     struct nui_element *first_child;
     struct nui_element *last_child;
     struct nui_element *next;
-    struct nui_element *pool_next;
     size_t children_count;
-    struct {
-        uint32_t flags; // enum nui_style_flags
-        uint32_t background_color; // RGBA8888
-    } style;
+
+    // Intrusive for pool memory management.
+    struct nui_element *pool_next;
 };
 
 struct nui_backend {
@@ -59,15 +68,28 @@ void nui_element_end(void);
 #define NUI_ONCE(before, after) for (size_t _t ## __LINE__ = 0; (_t ## __LINE__ < 1 ? (before, 1) : 0); (after, _t ## __LINE__++))
 #define NUI NUI_ONCE(nui_element_begin(), nui_element_end())
 
-// Sizing and layout.
+// Layout.
 void nui_layout(enum nui_layout layout);
-void nui_fixed(int width, int height);
-void nui_fixed_width(int width);
-void nui_fixed_height(int height);
+
+// Sizing.
+// By default, an element will automatically adapt itself to neatly "fit" all of its children.
+// Inversely, a child element can be configured to "grow" as big as possible within its parent,
+// sharing available space with other "growing" siblings.
 void nui_grow_width(void);
 void nui_grow_height(void);
 void nui_grow(void);
+// An element can be given a fixed size which simultanously acts as the minimum size for the purpose of
+// "fitting" and as the maximum size for the purpose of "growing".
+void nui_fixed(int width, int height);
+void nui_fixed_width(int width);
+void nui_fixed_height(int height);
+
+// Spacing.
+// Padding adds an offset inside an element along its edges.
 void nui_padding(int top, int right, int bottom, int left);
+// Margin adds an offset outside an element along its edges.
+void nui_margin(int top, int right, int bottom, int left);
+// Child gap on a parent element determines the spacing in-between its children.
 void nui_child_gap(int gap);
 
 // Styling.

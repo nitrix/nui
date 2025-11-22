@@ -139,11 +139,11 @@ void nui_fixed(int width, int height) {
 }
 
 void nui_grow_width(void) {
-    ctx.current->grow_width = true;
+    ctx.current->flags |= NUI_ELEMENT_FLAG_GROW_WIDTH;
 }
 
 void nui_grow_height(void) {
-    ctx.current->grow_height = true;
+    ctx.current->flags |= NUI_ELEMENT_FLAG_GROW_HEIGHT;
 }
 
 void nui_grow(void) {
@@ -152,8 +152,8 @@ void nui_grow(void) {
 }
 
 void nui_background_color(uint32_t color) {
+    ctx.current->flags |= NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR;
     ctx.current->style.background_color = color;
-    ctx.current->style.flags |= NUI_STYLE_FLAG_BACKGROUND_COLOR;
 }
 
 void nui_padding(int top, int right, int bottom, int left) {
@@ -228,7 +228,10 @@ void _nui_find_smallest_growable_along_children(struct nui_element *el, struct n
     *second_smallest = NULL;
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        bool growing_along_axis = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT ? child->grow_width : child->grow_height;
+        bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
+        bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+
+        bool growing_along_axis = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT ? grow_width : grow_height;
 
         if (!growing_along_axis) {
             continue;
@@ -309,7 +312,10 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
                 // Count how many have the same size.
                 size_t peers_count = 0;
                 for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-                    bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
+                    bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
+                    bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+
+                    bool growing_along_axis = xaxis ? grow_width : grow_height;
                     if (!growing_along_axis) {
                         continue;
                     }
@@ -323,7 +329,10 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
                 int give = MIN(remaining_along / (int) peers_count, remaining_along);
 
                 for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-                    bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
+                    bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
+                    bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+
+                    bool growing_along_axis = xaxis ? grow_width : grow_height;
                     if (!growing_along_axis) {
                         continue;
                     }
@@ -346,7 +355,10 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
                             break;
                         }
 
-                        bool growing_along_axis = xaxis ? child->grow_width : child->grow_height;
+                        bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
+                        bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+
+                        bool growing_along_axis = xaxis ? grow_width : grow_height;
                         if (!growing_along_axis) {
                             continue;
                         }
@@ -378,7 +390,10 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
 
     // Distribute remaining space across the layout axis.
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        bool growing_across = xaxis ? child->grow_height : child->grow_width;
+        bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
+        bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+
+        bool growing_across = xaxis ? grow_height : grow_width;
         if (!growing_across) {
             continue;
         }
@@ -413,7 +428,7 @@ void nui_update(void) {
 
 void _nui_render_element(const struct nui_element *el, int offset_x, int offset_y) {
     uint32_t color = 00000000;
-    if (el->style.flags & NUI_STYLE_FLAG_BACKGROUND_COLOR) {
+    if (el->flags & NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR) {
         color = el->style.background_color;
     }
 
