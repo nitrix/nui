@@ -456,6 +456,6 @@ void _nui_render_element(const struct nui_element *el, int offset_x, int offset_
 }
 
 void nui_render(void) {
-    ctx.backend->prepare(ctx.root.w, ctx.root.h);
+    ctx.backend->before_render(ctx.root.w, ctx.root.h);
     _nui_render_element(&ctx.root, 0, 0);
 }

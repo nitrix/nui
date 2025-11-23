@@ -127,7 +127,7 @@ void ngl_fini(void) {
     _unload_shader();
 }
 
-void ngl_prepare(int width, int height) {
+void ngl_before_render(int width, int height) {
     glViewport(0, 0, width, height);
     glUseProgram(program);
     glBindVertexArray(vao);

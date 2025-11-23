@@ -19,9 +19,9 @@ target_link_libraries(backend-sw PUBLIC nui)
 add_executable(example main.c)
 target_link_libraries(example nui backend-ngl glad glfw)
 target_compile_options(example PRIVATE -std=c23 -Wall -Wextra -pedantic)
-
 # target_compile_options(example PRIVATE -fsanitize=address,undefined)
 # target_link_options(example PRIVATE -fsanitize=address,undefined)
+
 enable_testing()
 
 file(GLOB testfiles_fullpath "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.c")

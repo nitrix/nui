@@ -45,7 +45,7 @@ struct nui_element {
 struct nui_backend {
     void (*init)(void);
     void (*fini)(void);
-    void (*prepare)(int width, int height);
+    void (*before_render)(int width, int height);
     void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
 };
 

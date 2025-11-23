@@ -6,14 +6,14 @@
 
 void sw_init(void);
 void sq_fini(void);
-void sw_prepare(int width, int height);
+void sw_before_render(int width, int height);
 void sw_draw_rect(int x, int y, int width, int height, uint32_t color);
 void sw_export(const char *filename);
 
 static struct nui_backend _sw = {
     .init = sw_init,
     .fini = sq_fini,
-    .prepare = sw_prepare,
+    .before_render = sw_before_render,
     .draw_rect = sw_draw_rect,
 };
 
