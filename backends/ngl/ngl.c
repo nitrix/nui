@@ -12,7 +12,7 @@ static struct {
 static struct {
     GLint position, size, color;
     GLint viewport;
-    GLint texture, use_texture;
+    GLint texture, use_texture, image_size;
 } uniforms;
 static struct {
     GLboolean blend;
@@ -28,13 +28,14 @@ void _load_shader(void) {
         "uniform vec2 u_position;\n"
         "uniform vec2 u_size;\n"
         "uniform vec2 u_viewport;\n"
+        "uniform vec2 u_image_size;\n"
         "out vec2 v_uv;\n"
         "void main() {\n"
         "    vec2 pos = u_position + a_position * u_size;\n"
         "    float ndc_x = (pos.x / u_viewport.x) * 2 - 1;\n"
         "    float ndc_y = (pos.y / u_viewport.y) * -2 + 1;\n"
         "    gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);\n"
-        "    v_uv = a_uv * vec2(4.7619, 1);\n"
+        "    v_uv = a_uv * (u_size / u_image_size);\n"
         "}\n";
     char *fragment_shader_src =
         "#version 410 core\n"
@@ -98,6 +99,7 @@ void _load_shader(void) {
     uniforms.viewport = glGetUniformLocation(program, "u_viewport");
     uniforms.texture = glGetUniformLocation(program, "u_texture");
     uniforms.use_texture = glGetUniformLocation(program, "u_use_texture");
+    uniforms.image_size = glGetUniformLocation(program, "u_image_size");
 }
 
 void _load_quad(void) {
@@ -161,9 +163,8 @@ struct nui_image *ngl_load_image_from_file(const char *filename) {
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glGenerateMipmap(GL_TEXTURE_2D);
 
     stbi_image_free(pixels);
 
@@ -230,7 +231,7 @@ void ngl_draw_image(int x, int y, int w, int h, struct nui_image *image) {
     glUniform2f(uniforms.position, (float) x, (float) y);
     glUniform2f(uniforms.size, (float) w, (float) h);
     glUniform1i(uniforms.texture, 0);
-
+    glUniform2f(uniforms.image_size, (float) image->width, (float) image->height);
     glUniform1i(uniforms.use_texture, 1);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);

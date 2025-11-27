@@ -1,6 +1,6 @@
 #include "testing.h"
 
-int sanity_image_and_blend(int argc, char **argv) {
+int sanity_blend_and_image_repeat(int argc, char **argv) {
     TEST_BEFORE();
 
     struct nui_image *logo = nui_load_image_from_file("../assets/nui.png");
@@ -18,8 +18,15 @@ int sanity_image_and_blend(int argc, char **argv) {
             nui_fixed_height(100);
             nui_grow_width();
             nui_background_color(0xFF000033);
+            nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
 
             NUI_IMAGE(logo);
+
+            NUI {
+                nui_fixed_width(200);
+                nui_fixed_height(21);
+                nui_background_image(logo);
+            }
         }
 
         NUI {

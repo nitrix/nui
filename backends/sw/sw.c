@@ -123,20 +123,25 @@ void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
 void sw_draw_image(int x, int y, int width, int height, struct nui_image *image) {
     // FIXME: Support width/height scaling.
 
-    // printf("sw_draw_image: x=%d, y=%d, width=%d, height=%d, image_width=%d, image_height=%d\n", x, y, width, height, image->width, image->height);
+    printf("sw_draw_image: x=%d, y=%d, width=%d, height=%d, image_width=%d, image_height=%d\n", x, y, width, height, image->width, image->height);
 
     unsigned char *image_pixels = (unsigned char *) image->handle;
 
-    for (int h = 0; h < image->height; h++) {
-        for (int w = 0; w < image->width; w++) {
-            int px = w + x;
-            int py = h + y;
-            _blend_draw_at(px, py,
-                (((uint32_t)image_pixels[(image->width * h + w)*4 + 0]) << 24) |
-                (((uint32_t)image_pixels[(image->width * h + w)*4 + 1]) << 16) |
-                (((uint32_t)image_pixels[(image->width * h + w)*4 + 2]) << 8) |
-                (((uint32_t)image_pixels[(image->width * h + w)*4 + 3]) << 0)
-            );
+    for (int iy = 0; iy < height; iy++) {
+        for (int ix = 0; ix < width; ix++) {
+            int px = x + ix;
+            int py = y + iy;
+
+            int ax = ix % image->width;
+            int ay = iy % image->height;
+
+            uint8_t r = image_pixels[(image->width * ay + ax)*4 + 0];
+            uint8_t g = image_pixels[(image->width * ay + ax)*4 + 1];
+            uint8_t b = image_pixels[(image->width * ay + ax)*4 + 2];
+            uint8_t a = image_pixels[(image->width * ay + ax)*4 + 3];
+            uint32_t color = (r << 24) | (g << 16) | (b << 8) | a;
+
+            _blend_draw_at(px, py, color);
         }
     }
 }
