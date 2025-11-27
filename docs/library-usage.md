@@ -6,6 +6,8 @@
 
 * The size of viewport needs to be maintained proper by calling `nui_viewport()` with the dimensions of the framebuffer when the window is created and when it gets resized.
 
+* Images are expected to be manually preloaded with `nui_load_image_from_file()` which produces a handle for later uses and then cleaned up with `nui_unload_image()`.
+
 ## Main loop
 
 * Every frame, before performing any call to nui, you must invoke `nui_frame()`, which, amongst other things, will reset the internal arena.
@@ -24,7 +26,7 @@ Even though the library uses an area, you can control how that arena aquires and
 
 ## Syntaxic sugar
 
-The macro NUI() isn't magical. It simply invokes `nui_element_begin()` before your code and `nui_element_end()` after your code. The body is simultanously for configuring the element and to provide the children.
+The macro `NUI()` isn't magical. It simply invokes `nui_element_begin()` before your code and `nui_element_end()` after your code. The body is simultanously for configuring the element and to provide the children.
 
 So this below:
 ```c
@@ -42,17 +44,32 @@ NUI {
 is the exact same as:
 
 ```c
-struct nui_element parent = {0};
-nui_element_begin(&parent);
+nui_element_begin();
 {
     // Configuration here.
     nui_fixed(100, 100);
 
     // Children also here.
-    struct nui_element child = {0};
-    nui_element_begin(&child);
+    nui_element_begin();
     nui_fixed(50, 50);
-    nui_element_end(&child);
+    nui_element_end();
 }
-nui_element_end(&parent);
+nui_element_end();
+```
+
+By convention, we place all the element's attributes at the top prior to the children.
+
+Sometimes other convenience macros exists like:
+
+```c
+NUI_IMAGE(image);
+```
+
+which really just a helper to get an element with a background image that has a fixed size the same as the image:
+
+```c
+NUI {
+    nui_fixed(image->width, image->height);
+    nui_background_image(image);
+}
 ```

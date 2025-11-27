@@ -9,19 +9,21 @@ target_include_directories(nui PUBLIC nui)
 
 add_library(backend-ngl STATIC backends/ngl/ngl.c)
 target_include_directories(backend-ngl PUBLIC backends/ngl)
+target_include_directories(backend-ngl PRIVATE vendor/stb)
 target_link_libraries(backend-ngl PRIVATE glad)
 target_link_libraries(backend-ngl PUBLIC nui)
 
 add_library(backend-sw STATIC backends/sw/sw.c)
 target_include_directories(backend-sw PUBLIC backends/sw)
+target_include_directories(backend-sw PRIVATE vendor/stb)
 target_link_libraries(backend-sw PUBLIC nui)
 
 add_executable(example main.c)
 target_link_libraries(example nui backend-ngl glad glfw)
 target_compile_options(example PRIVATE -std=c23 -Wall -Wextra -pedantic)
+
 # target_compile_options(example PRIVATE -fsanitize=address,undefined)
 # target_link_options(example PRIVATE -fsanitize=address,undefined)
-
 enable_testing()
 
 file(GLOB testfiles_fullpath "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.c")

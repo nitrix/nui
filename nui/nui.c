@@ -156,6 +156,10 @@ void nui_background_color(uint32_t color) {
     ctx.current->style.background_color = color;
 }
 
+void nui_background_image(struct nui_image *image) {
+    ctx.current->style.background_image = image;
+}
+
 void nui_padding(int top, int right, int bottom, int left) {
     ctx.current->padding.top = top;
     ctx.current->padding.right = right;
@@ -426,13 +430,17 @@ void nui_update(void) {
     _nui_positioning_pass_element(&ctx.root);
 }
 
-void _nui_render_element(const struct nui_element *el, int offset_x, int offset_y) {
-    uint32_t color = 00000000;
+void _nui_render_element(struct nui_element *el, int offset_x, int offset_y) {
+    uint32_t color = 0x00000000; // Transparent.
     if (el->flags & NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR) {
         color = el->style.background_color;
     }
 
-    ctx.backend->draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
+    if (el->style.background_image) {
+        ctx.backend->draw_image(offset_x + el->x, offset_y + el->y, el->w, el->h, el->style.background_image);
+    } else {
+        ctx.backend->draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
+    }
 
     // Padding.
     offset_x += el->padding.left;
@@ -457,5 +465,17 @@ void _nui_render_element(const struct nui_element *el, int offset_x, int offset_
 
 void nui_render(void) {
     ctx.backend->before_render(ctx.root.w, ctx.root.h);
-    _nui_render_element(&ctx.root, 0, 0);
+
+    int offset_x = 0, offset_y = 0;
+    _nui_render_element(&ctx.root, offset_x, offset_y);
+
+    ctx.backend->after_render();
+}
+
+struct nui_image *nui_load_image_from_file(const char *filename) {
+    return ctx.backend->load_image_from_file(filename);
+}
+
+void nui_unload_image(struct nui_image *image) {
+    ctx.backend->unload_image(image);
 }

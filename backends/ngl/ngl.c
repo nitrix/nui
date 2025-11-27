@@ -1,4 +1,7 @@
+#define STB_IMAGE_IMPLEMENTATION
 #include "glad/glad.h"
+#include "nui.h"
+#include "stb_image.h"
 #include <stdio.h>
 
 static GLuint program;
@@ -9,7 +12,13 @@ static struct {
 static struct {
     GLint position, size, color;
     GLint viewport;
+    GLint texture, use_texture;
 } uniforms;
+static struct {
+    GLboolean blend;
+    GLint blend_src;
+    GLint blend_dst;
+} previous;
 
 void _load_shader(void) {
     char *vertex_shader_src =
@@ -31,9 +40,15 @@ void _load_shader(void) {
         "#version 410 core\n"
         "in vec2 v_uv;\n"
         "uniform vec4 u_color;\n"
+        "uniform int u_use_texture;\n"
+        "uniform sampler2D u_texture;\n"
         "out vec4 frag_color;\n"
         "void main() {\n"
-        "    frag_color = u_color;\n"
+        "    if (u_use_texture == 1) {\n"
+        "        frag_color = texture(u_texture, v_uv);\n"
+        "    } else {\n"
+        "       frag_color = u_color;\n"
+        "    }\n"
         "}\n";
 
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
@@ -81,6 +96,8 @@ void _load_shader(void) {
     uniforms.size = glGetUniformLocation(program, "u_size");
     uniforms.color = glGetUniformLocation(program, "u_color");
     uniforms.viewport = glGetUniformLocation(program, "u_viewport");
+    uniforms.texture = glGetUniformLocation(program, "u_texture");
+    uniforms.use_texture = glGetUniformLocation(program, "u_use_texture");
 }
 
 void _load_quad(void) {
@@ -127,22 +144,94 @@ void ngl_fini(void) {
     _unload_shader();
 }
 
+struct nui_image *ngl_load_image_from_file(const char *filename) {
+    int width, height, channels;
+    unsigned char *pixels = stbi_load(filename, &width, &height, &channels, 4);
+    if (!pixels) {
+        return NULL;
+    }
+
+    struct nui_image *image = malloc(sizeof *image);
+    if (!image) {
+        stbi_image_free(pixels);
+        return NULL;
+    }
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    stbi_image_free(pixels);
+
+    image->handle = (void *)(uintptr_t)texture;
+    image->width = width;
+    image->height = height;
+
+    return image;
+}
+
+void ngl_unload_image(struct nui_image *image) {
+    GLuint id = (GLuint)(uintptr_t) image->handle;
+    glDeleteTextures(1, &id);
+    free(image);
+}
+
 void ngl_before_render(int width, int height) {
     glViewport(0, 0, width, height);
     glUseProgram(program);
     glBindVertexArray(vao);
     glUniform2f(uniforms.viewport, (float) width, (float) height);
+
+    glGetBooleanv(GL_BLEND, &previous.blend);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &previous.blend_src);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &previous.blend_dst);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+void ngl_after_render(void) {
+    if (!previous.blend) {
+        glDisable(GL_BLEND);
+    }
+
+    glBlendFunc(previous.blend_src, previous.blend_dst);
+}
+
+void _color_to_floats(uint32_t color, float *r, float *g, float *b, float *a) {
+    *r = ((color >> 24) & 0xFF) / 255.0f;
+    *g = ((color >> 16) & 0xFF) / 255.0f;
+    *b = ((color >> 8) & 0xFF) / 255.0f;
+    *a = (color & 0xFF) / 255.0f;
 }
 
 void ngl_draw_rect(int x, int y, int w, int h, uint32_t color) {
-    float r = ((color >> 24) & 0xFF) / 255.0f;
-    float g = ((color >> 16) & 0xFF) / 255.0f;
-    float b = ((color >> 8) & 0xFF) / 255.0f;
-    float a = (color & 0xFF) / 255.0f;
+    float r, g, b, a;
+    _color_to_floats(color, &r, &g, &b, &a);
 
     glUniform4f(uniforms.color, r, g, b, a);
     glUniform2f(uniforms.position, (float) x, (float) y);
     glUniform2f(uniforms.size, (float) w, (float) h);
+    glUniform1i(uniforms.use_texture, 0);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void ngl_draw_image(int x, int y, int w, int h, struct nui_image *image) {
+    GLuint texture = (GLuint)(uintptr_t) image->handle;
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glUniform2f(uniforms.position, (float) x, (float) y);
+    glUniform2f(uniforms.size, (float) w, (float) h);
+    glUniform1i(uniforms.texture, 0);
+
+    glUniform1i(uniforms.use_texture, 1);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }

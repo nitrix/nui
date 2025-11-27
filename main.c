@@ -41,33 +41,6 @@ static void _debug(GLenum source, GLenum type, unsigned int id, GLenum severity,
     fprintf(stderr, "[OpenGL debug] source: %d, type: %d, id: %d, severity: %d, message: %s\n", source, type, id, severity, message);
 }
 
-void _example(void) {
-    nui_frame();
-
-    #define BLUE 0x0a6d89ff
-    #define PINK 0xf1928fff
-    #define YELLOW 0xfed84dff
-    #define LIGHT_BLUE 0x5ecbe4ff
-
-    NUI {
-        nui_fixed_width(1200);
-        nui_background_color(BLUE);
-        nui_padding(32, 32, 32, 32);
-        nui_child_gap(2);
-
-        for (size_t i = 0; i < 100; i++) {
-            NUI {
-                nui_fixed_height(100);
-                nui_grow_width();
-                nui_background_color(PINK);
-            }
-        }
-    }
-
-    nui_update();
-    nui_render();
-}
-
 int main(void) {
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
@@ -127,16 +100,73 @@ int main(void) {
     glfwGetFramebufferSize(window, &fb_width, &fb_height);
     nui_viewport(fb_width, fb_height);
 
+    struct nui_image *logo = nui_load_image_from_file("assets/nui.png");
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        _example();
+        {
+            nui_frame();
+
+            #define BLUE 0x0a6d89ff
+            #define PINK 0xf1928fff
+            #define YELLOW 0xfed84dff
+            #define LIGHT_BLUE 0x5ecbe4ff
+
+            NUI {
+                nui_fixed_width(1200);
+                nui_background_color(BLUE);
+                nui_padding(32, 32, 32, 32);
+                nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+
+                NUI {
+                    nui_fixed_height(100);
+                    nui_grow_width();
+                    nui_background_color(0xFF000033);
+
+                    // NUI {
+                    // nui_fixed(45, 45);
+                    // nui_background_color(YELLOW);
+                    // nui_background_image(logo);
+                    // }
+
+                    NUI_IMAGE(logo);
+                }
+
+                NUI {
+                    nui_child_gap(32);
+                    nui_grow_width();
+
+                    NUI {
+                        nui_fixed_height(100);
+                        nui_grow_width();
+                        nui_background_color(PINK);
+                    }
+
+                    NUI {
+                        nui_fixed_height(100);
+                        nui_grow_width();
+                    }
+
+                    NUI {
+                        nui_fixed_height(100);
+                        nui_grow_width();
+                        nui_background_color(PINK);
+                    }
+                }
+            }
+
+            nui_update();
+            nui_render();
+        }
 
         glfwSwapBuffers(window);
     }
+
+    nui_unload_image(logo);
 
     nui_fini();
 

@@ -4,6 +4,7 @@
 // IWYU pragma: begin_keep
 #include "nui.h"
 #include "sw.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 // IWYU pragma: end_keep

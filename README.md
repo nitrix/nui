@@ -1,14 +1,16 @@
 # nui
 
+![](assets/nui.png)
+
 A UI library.
-
-## Preview
-
-![](tests/expected/sanity_grow_both.png)
 
 ## Status
 
 Work-in-progress; not ready to be used.
+
+## Preview
+
+![](tests/expected/sanity_grow_both.png)
 
 ## Documentation
 
