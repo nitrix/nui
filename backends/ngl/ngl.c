@@ -34,7 +34,7 @@ void _load_shader(void) {
         "    float ndc_x = (pos.x / u_viewport.x) * 2 - 1;\n"
         "    float ndc_y = (pos.y / u_viewport.y) * -2 + 1;\n"
         "    gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);\n"
-        "    v_uv = a_uv;\n"
+        "    v_uv = a_uv * vec2(4.7619, 1);\n"
         "}\n";
     char *fragment_shader_src =
         "#version 410 core\n"

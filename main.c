@@ -127,13 +127,15 @@ int main(void) {
                     nui_grow_width();
                     nui_background_color(0xFF000033);
 
-                    // NUI {
-                    // nui_fixed(45, 45);
-                    // nui_background_color(YELLOW);
-                    // nui_background_image(logo);
-                    // }
+                    NUI {
+                        nui_fixed(200, 45);
+                        nui_background_color(YELLOW);
+                        nui_background_image(logo);
+                    }
 
-                    NUI_IMAGE(logo);
+                    // for (size_t i = 0; i < 5; i++) {
+                    // NUI_IMAGE(logo);
+                    // }
                 }
 
                 NUI {
