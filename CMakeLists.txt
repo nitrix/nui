@@ -22,7 +22,7 @@ target_include_directories(backend-ngl PRIVATE vendor/stb)
 target_link_libraries(backend-ngl PRIVATE glad)
 target_link_libraries(backend-ngl PUBLIC nui)
 
-if(unix)
+if(UNIX)
     target_link_libraries(backend-ngl PRIVATE m)
 endif()
 
@@ -34,7 +34,7 @@ target_include_directories(backend-sw PUBLIC backends/sw)
 target_include_directories(backend-sw PRIVATE vendor/stb)
 target_link_libraries(backend-sw PUBLIC nui)
 
-if(unix)
+if(UNIX)
     target_link_libraries(backend-sw PRIVATE m)
 endif()
 
