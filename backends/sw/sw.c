@@ -121,9 +121,7 @@ void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
 }
 
 void sw_draw_image(int x, int y, int width, int height, struct nui_image *image) {
-    // FIXME: Support width/height scaling.
-
-    printf("sw_draw_image: x=%d, y=%d, width=%d, height=%d, image_width=%d, image_height=%d\n", x, y, width, height, image->width, image->height);
+    // printf("sw_draw_image: x=%d, y=%d, width=%d, height=%d, image_width=%d, image_height=%d\n", x, y, width, height, image->width, image->height);
 
     unsigned char *image_pixels = (unsigned char *) image->handle;
 

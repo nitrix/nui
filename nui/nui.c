@@ -438,7 +438,7 @@ void _nui_render_element(struct nui_element *el, int offset_x, int offset_y) {
 
     if (el->style.background_image) {
         ctx.backend->draw_image(offset_x + el->x, offset_y + el->y, el->w, el->h, el->style.background_image);
-    } else {
+    } else if (color) { // Only draw if color is not fully transparent.
         ctx.backend->draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
     }
 
