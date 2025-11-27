@@ -2,15 +2,27 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "sanity_image_and_blend",
+            "name": "Example",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/test_runner.exe",
-            "args": [
-                "sanity_image_and_blend"
-            ],
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+        },
+        {
+            "name": "Test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [
+                "sanity_image_and_blend" // Test name to run.
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/tests",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
