@@ -5,9 +5,37 @@ on:
     branches:
       - master
 jobs:
-  tests:
-    name: Tests
-    runs-on: ubuntu-24.04
+  testsWindows:
+    name: Tests (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: CLANG64
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
+          ninja test_runner
+          ninja test
+
+  testsLinux:
+    name: Tests (Linux)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +53,35 @@ jobs:
           sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev libwayland-dev libxkbcommon-dev
       - name: Build
         run: |
+          mkdir build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
+          ninja test_runner
+          ninja test
+
+  testsMacOS:
+    name: Tests (MacOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Dependencies
+        run: |
+          brew update
+          brew install llvm
+          brew formula install cmake
+      - name: Setup env variables
+        run: |
+          echo "CMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++" >> $GITHUB_ENV
+          echo "CMAKE_AR=$(brew --prefix llvm)/bin/llvm-ar" >> $GITHUB_ENV
+          echo "CMAKE_RANLIB=$(brew --prefix llvm)/bin/llvm-ranlib" >> $GITHUB_ENV
+          echo "CMAKE_LINKER=$(brew --prefix llvm)/bin/ld.lld" >> $GITHUB_ENV
+      - name: Build
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_26.0.app"
           mkdir build
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
