@@ -175,53 +175,52 @@ void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
 
-void _nui_fit_sizing_pass_element(struct nui_element *el) {
+void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        _nui_fit_sizing_pass_element(child);
+        _nui_fit_sizing_element(child, xaxis);
     }
 
-    if (el->fixed.width > 0) el->w = el->fixed.width;
-    if (el->fixed.height > 0) el->h = el->fixed.height;
+    if (xaxis) {
+        el->w = el->fixed.width;
+    } else {
+        el->h = el->fixed.height;
+    }
 
-    bool fit_width = el->fixed.width == 0;
-    bool fit_height = el->fixed.height == 0;
-
-    if (fit_width) {
+    bool fit = xaxis ? !el->fixed.width : !el->fixed.height;
+    if (fit) {
         // Children sizes.
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-            switch (el->layout) {
-                case NUI_LAYOUT_LEFT_TO_RIGHT: el->w += child->w; break;
-                case NUI_LAYOUT_TOP_TO_BOTTOM: el->w = MAX(el->w, child->w); break;
-            }
-        }
-
-        // Padding.
-        el->w += el->padding.left + el->padding.right;
-
-        // Gaps.
-        if (el->children_count > 0) {
             if (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) {
-                el->w += el->child_gap * (el->children_count - 1);
-            }
-        }
-    }
-
-    if (fit_height) {
-        // Children sizes.
-        for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-            switch (el->layout) {
-                case NUI_LAYOUT_LEFT_TO_RIGHT: el->h = MAX(el->h, child->h); break;
-                case NUI_LAYOUT_TOP_TO_BOTTOM: el->h += child->h; break;
+                if (xaxis) {
+                    el->w += child->w;
+                } else {
+                    el->h = MAX(el->h, child->h);
+                }
+            } else if (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) {
+                if (xaxis) {
+                    el->w = MAX(el->w, child->w);
+                } else {
+                    el->h += child->h;
+                }
             }
         }
 
         // Padding.
-        el->h += el->padding.top + el->padding.bottom;
+        if (xaxis) {
+            el->w += el->padding.left + el->padding.right;
+        } else {
+            el->h += el->padding.top + el->padding.bottom;
+        }
 
         // Gaps.
         if (el->children_count > 0) {
-            if (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) {
-                el->h += el->child_gap * (el->children_count - 1);
+            bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
+            if (along) {
+                if (xaxis) {
+                    el->w += el->child_gap * (el->children_count - 1);
+                } else {
+                    el->h += el->child_gap * (el->children_count - 1);
+                }
             }
         }
     }
@@ -268,33 +267,8 @@ void _nui_find_smallest_growable_along_children(struct nui_element *el, struct n
     }
 }
 
-void _nui_grow_sizing_pass_element(struct nui_element *el) {
-    bool xaxis = el->layout == NUI_LAYOUT_LEFT_TO_RIGHT;
-
-    int remaining_along = xaxis ? el->w : el->h;
-    int remaining_across = xaxis ? el->h : el->w;
-
-    // Children sizes.
-    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        remaining_along -= xaxis ? child->w : child->h;
-    }
-
-    // Padding.
-    if (xaxis) {
-        remaining_along -= (el->padding.left + el->padding.right);
-        remaining_across -= (el->padding.top + el->padding.bottom);
-    } else {
-        remaining_along -= (el->padding.top + el->padding.bottom);
-        remaining_across -= (el->padding.left + el->padding.right);
-    }
-
-    // Gaps.
-    if (el->children_count > 0) {
-        remaining_along -= el->child_gap * (el->children_count - 1);
-    }
-
-    // Distribute remaining space along the layout axis.
-    while (remaining_along > 0) {
+void _nui_distribute_remaining_space_among_growable_elements(struct nui_element *el, int remaining, bool xaxis) {
+    while (remaining > 0) {
         // Find the smallest and next smallest growable element.
         struct nui_element *first_smallest = NULL;
         struct nui_element *second_smallest = NULL;
@@ -303,13 +277,13 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
         if (first_smallest != NULL && second_smallest != NULL) {
             int diff = xaxis ? (second_smallest->w - first_smallest->w) : (second_smallest->h - first_smallest->h);
             if (diff > 0) {
-                int give = MIN(diff, remaining_along);
+                int give = MIN(diff, remaining);
                 if (xaxis) {
                     first_smallest->w += give;
                 } else {
                     first_smallest->h += give;
                 }
-                remaining_along -= give;
+                remaining -= give;
             } else {
                 size_t target_size = xaxis ? first_smallest->w : first_smallest->h;
 
@@ -318,156 +292,181 @@ void _nui_grow_sizing_pass_element(struct nui_element *el) {
                 for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
                     bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
                     bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
-
-                    bool growing_along_axis = xaxis ? grow_width : grow_height;
-                    if (!growing_along_axis) {
-                        continue;
-                    }
-
+                    bool grow = xaxis ? grow_width : grow_height;
                     bool same_size = xaxis ? (child->w == target_size) : (child->h == target_size);
-                    if (same_size) {
+                    if (grow && same_size) {
                         peers_count++;
                     }
                 }
 
-                int give = MIN(remaining_along / (int) peers_count, remaining_along);
+                int give = MIN(remaining / (int) peers_count, remaining);
 
                 for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
                     bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
                     bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
-
-                    bool growing_along_axis = xaxis ? grow_width : grow_height;
-                    if (!growing_along_axis) {
-                        continue;
-                    }
-
+                    bool grow = xaxis ? grow_width : grow_height;
                     bool same_size = xaxis ? (child->w == target_size) : (child->h == target_size);
-                    if (same_size) {
+                    if (grow && same_size) {
                         if (xaxis) {
                             child->w += give;
                         } else {
                             child->h += give;
                         }
-                        remaining_along -= give;
+                        remaining -= give;
                     }
                 }
 
                 // Unfair leftover.
-                if (remaining_along < (int) peers_count) {
+                if (remaining < (int) peers_count) {
                     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-                        if (remaining_along <= 0) {
+                        if (remaining <= 0) {
                             break;
                         }
 
                         bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
                         bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
-
-                        bool growing_along_axis = xaxis ? grow_width : grow_height;
-                        if (!growing_along_axis) {
-                            continue;
-                        }
-
+                        bool grow = xaxis ? grow_width : grow_height;
                         bool same_size = xaxis ? (child->w == target_size) : (child->h == target_size);
-                        if (same_size) {
+                        if (grow && same_size) {
                             if (xaxis) {
                                 child->w++;
                             } else {
                                 child->h++;
                             }
-                            remaining_along--;
+                            remaining--;
                         }
                     }
                 }
             }
         } else if (first_smallest != NULL) {
             if (xaxis) {
-                first_smallest->w += remaining_along;
+                first_smallest->w += remaining;
             } else {
-                first_smallest->h += remaining_along;
+                first_smallest->h += remaining;
             }
-            remaining_along = 0;
+            remaining = 0;
         } else {
             // No more growable children.
             break;
         }
     }
+}
 
-    // Distribute remaining space across the layout axis.
-    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
-        bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
+    bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
+    bool across = xaxis ? (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) : (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT);
 
-        bool growing_across = xaxis ? grow_height : grow_width;
-        if (!growing_across) {
-            continue;
+    int remaining = xaxis ? el->w : el->h;
+
+    // Padding.
+    remaining -= xaxis ? (el->padding.left + el->padding.right) : (el->padding.top + el->padding.bottom);
+
+    // Along the axis.
+    if (along) {
+        // Children sizes.
+        for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            remaining -= child->w;
         }
 
-        int element_size_across = xaxis ? child->h : child->w;
+        // Gaps between children.
+        if (el->children_count > 0) {
+            remaining -= el->child_gap * (el->children_count - 1);
+        }
 
-        if (xaxis) {
-            child->h += remaining_across - element_size_across;
-        } else {
-            child->w += remaining_across - element_size_across;
+        // Distribute remaining space along the width.
+        _nui_distribute_remaining_space_among_growable_elements(el, remaining, xaxis);
+    }
+
+    // Across the axis.
+    if (across) {
+        for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
+            bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
+            bool grow = xaxis ? grow_width : grow_height;
+            if (grow) {
+                if (xaxis) {
+                    child->w += remaining - child->w;
+                } else {
+                    child->h += remaining - child->h;
+                }
+            }
         }
     }
 
     // Recursively.
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        _nui_grow_sizing_pass_element(child);
+        _nui_grow_sizing_element(child, xaxis);
     }
 }
 
-void _nui_positioning_pass_element(struct nui_element *el) {
+void _nui_positioning_element(struct nui_element *el, int marker_x, int marker_y) {
+    el->x = marker_x;
+    el->y = marker_y;
+
+    // Padding.
+    marker_x += el->padding.left;
+    marker_y += el->padding.top;
+
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        _nui_positioning_pass_element(child);
+        _nui_positioning_element(child, marker_x, marker_y);
+
+        // Layout.
+        switch (el->layout) {
+            case NUI_LAYOUT_LEFT_TO_RIGHT: marker_x += child->w; break;
+            case NUI_LAYOUT_TOP_TO_BOTTOM: marker_y += child->h; break;
+        }
+
+        // Child gap.
+        switch (el->layout) {
+            case NUI_LAYOUT_LEFT_TO_RIGHT: marker_x += el->child_gap; break;
+            case NUI_LAYOUT_TOP_TO_BOTTOM: marker_y += el->child_gap; break;
+        }
     }
 }
 
 void nui_update(void) {
     // Order is VERY important.
-    _nui_fit_sizing_pass_element(&ctx.root);
-    _nui_grow_sizing_pass_element(&ctx.root);
-    _nui_positioning_pass_element(&ctx.root);
+
+    // 1 - Fit sizing widths pass.
+    _nui_fit_sizing_element(&ctx.root, true);
+    // 2 - Grow and shrink sizing widths pass.
+    _nui_grow_sizing_element(&ctx.root, true);
+    // _nui_shrink_sizing_element();
+
+    // 3 - Wrap text pass.
+    // _nui_wrap_text_pass();
+
+    // 4 - Fit sizing heights pass.
+    _nui_fit_sizing_element(&ctx.root, false);
+    // 5 - Grow and shrink sizing heights pass.
+    // _nui_shrink_sizing_element(&ctx.root, false);
+    _nui_grow_sizing_element(&ctx.root, false);
+
+    // 6 - Positioning pass.
+    _nui_positioning_element(&ctx.root, 0, 0);
 }
 
-void _nui_render_element(struct nui_element *el, int offset_x, int offset_y) {
+void _nui_render_element(struct nui_element *el) {
     uint32_t color = 0x00000000; // Transparent.
     if (el->flags & NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR) {
         color = el->style.background_color;
     }
 
     if (el->style.background_image) {
-        ctx.backend->draw_image(offset_x + el->x, offset_y + el->y, el->w, el->h, el->style.background_image);
+        ctx.backend->draw_image(el->x, el->y, el->w, el->h, el->style.background_image);
     } else if (color) { // Only draw if color is not fully transparent.
-        ctx.backend->draw_rect(offset_x + el->x, offset_y + el->y, el->w, el->h, color);
+        ctx.backend->draw_rect(el->x, el->y, el->w, el->h, color);
     }
 
-    // Padding.
-    offset_x += el->padding.left;
-    offset_y += el->padding.top;
-
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        _nui_render_element(child, offset_x, offset_y);
-
-        // Layout.
-        switch (el->layout) {
-            case NUI_LAYOUT_LEFT_TO_RIGHT: offset_x += child->w; break;
-            case NUI_LAYOUT_TOP_TO_BOTTOM: offset_y += child->h; break;
-        }
-
-        // Child gap.
-        switch (el->layout) {
-            case NUI_LAYOUT_LEFT_TO_RIGHT: offset_x += el->child_gap; break;
-            case NUI_LAYOUT_TOP_TO_BOTTOM: offset_y += el->child_gap; break;
-        }
+        _nui_render_element(child);
     }
 }
 
 void nui_render(void) {
     ctx.backend->before_render(ctx.root.w, ctx.root.h);
 
-    int offset_x = 0, offset_y = 0;
-    _nui_render_element(&ctx.root, offset_x, offset_y);
+    _nui_render_element(&ctx.root);
 
     ctx.backend->after_render();
 }
