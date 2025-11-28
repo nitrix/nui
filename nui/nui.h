@@ -29,7 +29,7 @@ struct nui_element {
     struct { int top, right, bottom, left; } padding; // px
     struct { int top, right, bottom, left; } margin; // px
     int child_gap; // px
-    uint32_t flags; // See enum nui_element_flags.
+    enum nui_element_flags flags;
     struct {
         uint32_t background_color; // RGBA8888
         struct nui_image *background_image;
@@ -39,13 +39,15 @@ struct nui_element {
     int x, y, w, h; // px
 
     // Hierarchy.
+    // Quite intrusive by having elements point to their parent and siblings directly.
     struct nui_element *parent;
     struct nui_element *first_child;
     struct nui_element *last_child;
     struct nui_element *next;
     size_t children_count;
 
-    // Intrusive for pool memory management.
+    // Pool management.
+    // Also intrusive, to form the pool's active/inactive element lists.
     struct nui_element *pool_next;
 };
 

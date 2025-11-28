@@ -20,37 +20,48 @@ static struct {
     GLint blend_dst;
 } previous;
 
+#define SHADER_SOURCE(...) "#version 410 core\n" #__VA_ARGS__
+
 void _load_shader(void) {
-    char *vertex_shader_src =
-        "#version 410 core\n"
-        "in vec2 a_position;\n"
-        "in vec2 a_uv;\n"
-        "uniform vec2 u_position;\n"
-        "uniform vec2 u_size;\n"
-        "uniform vec2 u_viewport;\n"
-        "uniform vec2 u_image_size;\n"
-        "out vec2 v_uv;\n"
-        "void main() {\n"
-        "    vec2 pos = u_position + a_position * u_size;\n"
-        "    float ndc_x = (pos.x / u_viewport.x) * 2 - 1;\n"
-        "    float ndc_y = (pos.y / u_viewport.y) * -2 + 1;\n"
-        "    gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);\n"
-        "    v_uv = a_uv * (u_size / u_image_size);\n"
-        "}\n";
-    char *fragment_shader_src =
-        "#version 410 core\n"
-        "in vec2 v_uv;\n"
-        "uniform vec4 u_color;\n"
-        "uniform int u_use_texture;\n"
-        "uniform sampler2D u_texture;\n"
-        "out vec4 frag_color;\n"
-        "void main() {\n"
-        "    if (u_use_texture == 1) {\n"
-        "        frag_color = texture(u_texture, v_uv);\n"
-        "    } else {\n"
-        "       frag_color = u_color;\n"
-        "    }\n"
-        "}\n";
+    const char *vertex_shader_src = SHADER_SOURCE(
+        \x20 // Trick to avoid my editor formatter ruining the indentation.
+
+        in vec2 a_position;
+        in vec2 a_uv;
+        out vec2 v_uv;
+
+        uniform vec2 u_position;
+        uniform vec2 u_size;
+        uniform vec2 u_viewport;
+        uniform vec2 u_image_size;
+
+        void main() {
+            vec2 pos = u_position + a_position * u_size;
+            float ndc_x = (pos.x / u_viewport.x) * 2 - 1;
+            float ndc_y = (pos.y / u_viewport.y) * -2 + 1;
+            gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);
+            v_uv = a_uv * (u_size / u_image_size);
+        }
+    );
+
+    const char *fragment_shader_src = SHADER_SOURCE(
+        \x20 // Trick to avoid my editor formatter ruining the indentation.
+
+        in vec2 v_uv;
+        out vec4 frag_color;
+
+        uniform vec4 u_color;
+        uniform int u_use_texture;
+        uniform sampler2D u_texture;
+
+        void main() {
+            if (u_use_texture == 1) {
+                frag_color = texture(u_texture, v_uv);
+            } else {
+                frag_color = u_color;
+            }
+        }
+    );
 
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, (const char * const *) &vertex_shader_src, NULL);
