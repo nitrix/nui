@@ -23,21 +23,32 @@ static struct {
     struct nui_element *current;
 } ctx;
 
+void _init_element(struct nui_element *el) {
+    struct nui_element template = {
+        .layout = NUI_LAYOUT_LEFT_TO_RIGHT,
+    };
+
+    *el = template;
+}
+
 struct nui_element *_new_element(void) {
     if (ctx.pool.inactive_elements_first) {
         struct nui_element *el = ctx.pool.inactive_elements_first;
+
         ctx.pool.inactive_elements_first = el->pool_next;
-        memset(el, 0, sizeof *el);
+        _init_element(el);
         el->pool_next = ctx.pool.active_elements_first;
         ctx.pool.active_elements_first = el;
         if (!ctx.pool.active_elements_last) {
             ctx.pool.active_elements_last = el;
         }
+
         return el;
     }
 
     struct nui_element *el = ctx.memory.malloc(sizeof *el);
-    memset(el, 0, sizeof *el);
+    _init_element(el);
+
     el->pool_next = ctx.pool.active_elements_first;
     ctx.pool.active_elements_first = el;
     if (!ctx.pool.active_elements_last) {
@@ -47,21 +58,22 @@ struct nui_element *_new_element(void) {
     return el;
 }
 
-void nui_init(struct nui_backend *backend) {
+void _pool_init(void) {
     ctx.pool.active_elements_first = NULL;
     ctx.pool.active_elements_last = NULL;
     ctx.pool.inactive_elements_first = NULL;
-    ctx.memory.malloc = malloc;
-    ctx.memory.free = free;
-    ctx.root.parent = NULL;
-    ctx.root.first_child = NULL;
-    ctx.root.last_child = NULL;
-    ctx.root.children_count = 0;
-    ctx.backend = backend;
-    ctx.backend->init();
 }
 
-void nui_fini(void) {
+void _pool_reset(void) {
+    if (ctx.pool.active_elements_last) {
+        ctx.pool.active_elements_last->pool_next = ctx.pool.inactive_elements_first;
+        ctx.pool.inactive_elements_first = ctx.pool.active_elements_first;
+        ctx.pool.active_elements_first = NULL;
+        ctx.pool.active_elements_last = NULL;
+    }
+}
+
+void _pool_fini(void) {
     for (struct nui_element *el = ctx.pool.active_elements_first; el != NULL; ) {
         struct nui_element *next = el->pool_next;
         ctx.memory.free(el);
@@ -73,27 +85,34 @@ void nui_fini(void) {
         ctx.memory.free(el);
         el = next;
     }
+}
 
+void nui_init(struct nui_backend *backend) {
+    _pool_init();
+    _init_element(&ctx.root);
+    ctx.memory.malloc = malloc;
+    ctx.memory.free = free;
+    ctx.backend = backend;
+    ctx.backend->init();
+}
+
+void nui_fini(void) {
+    _pool_fini();
     ctx.backend->fini();
 }
 
 void nui_frame(void) {
+    _pool_reset();
+
+    // Reset the children for the root element but keep the rest intact.
     ctx.root.first_child = NULL;
     ctx.root.last_child = NULL;
     ctx.root.children_count = 0;
-
-    if (ctx.pool.active_elements_last) {
-        ctx.pool.active_elements_last->pool_next = ctx.pool.inactive_elements_first;
-        ctx.pool.inactive_elements_first = ctx.pool.active_elements_first;
-        ctx.pool.active_elements_first = NULL;
-        ctx.pool.active_elements_last = NULL;
-    }
 }
 
 void nui_viewport(int width, int height) {
-    ctx.current = &ctx.root;
-    nui_fixed(width, height);
-    ctx.current = NULL;
+    ctx.root.fixed.width = width;
+    ctx.root.fixed.height = height;
 }
 
 void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr)) {
