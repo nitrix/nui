@@ -10,16 +10,21 @@ enum nui_layout {
     NUI_LAYOUT_TOP_TO_BOTTOM,
 };
 
-enum nui_element_flags {
-    NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR = 1,
-    NUI_ELEMENT_FLAG_GROW_WIDTH = 2,
-    NUI_ELEMENT_FLAG_GROW_HEIGHT = 4,
+enum nui_element_flags : uint32_t {
+    NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR = (1 << 0),
+    NUI_ELEMENT_FLAG_HAS_FONT_COLOR = (1 << 1),
+    NUI_ELEMENT_FLAG_GROW_WIDTH = (1 << 2),
+    NUI_ELEMENT_FLAG_GROW_HEIGHT = (1 << 3),
 };
 
 struct nui_image {
     void *handle; // Backend-specific image handle.
     int width;
     int height;
+};
+
+struct nui_font {
+    void *handle; // Backend-specific font handle.
 };
 
 struct nui_element {
@@ -32,8 +37,11 @@ struct nui_element {
     enum nui_element_flags flags;
     struct {
         uint32_t background_color; // RGBA8888
-        struct nui_image *background_image;
+        uint32_t font_color; // RGBA8888
+        const struct nui_image *background_image;
+        const struct nui_font *font;
     } style;
+    const char *text;
 
     // Position and size which gets computed during the update phase.
     int x, y, w, h; // px
@@ -57,9 +65,12 @@ struct nui_backend {
     void (*before_render)(int width, int height);
     void (*after_render)(void);
     void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
-    void (*draw_image)(int x, int y, int w, int h, struct nui_image *image);
+    void (*draw_image)(int x, int y, int w, int h, const struct nui_image *image);
+    void (*draw_text)(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
     struct nui_image *(*load_image_from_file)(const char *filename);
     void (*unload_image)(struct nui_image *image);
+    struct nui_font *(*load_font_from_file)(const char *filename, float font_size);
+    void (*unload_font)(struct nui_font *font);
 };
 
 // Lifetime.
@@ -103,13 +114,22 @@ void nui_margin(int top, int right, int bottom, int left);
 // Child gap on a parent element determines the spacing in-between its children.
 void nui_child_gap(int gap);
 
+// Text.
+void nui_text(const char *fmt, ...);
+
 // Styling.
 void nui_background_color(uint32_t color);
-void nui_background_image(struct nui_image *image);
+void nui_background_image(const struct nui_image *image);
+void nui_font(const struct nui_font *font);
+void nui_font_color(uint32_t color);
 
 // Images.
 struct nui_image *nui_load_image_from_file(const char *filename);
 void nui_unload_image(struct nui_image *image);
+
+// Fonts.
+struct nui_font *nui_load_font_from_file(const char *filename, float font_size);
+void nui_unload_font(struct nui_font *font);
 
 // Convenience macros.
 #define NUI_ONCE(before, after) for (size_t _t ## __LINE__ = 0; (_t ## __LINE__ < 1 ? (before, 1) : 0); (after, _t ## __LINE__++))

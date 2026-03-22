@@ -51,7 +51,9 @@ nui_element_begin();
 
     // Children also here.
     nui_element_begin();
-    nui_fixed(50, 50);
+    {
+        nui_fixed(50, 50);
+    }
     nui_element_end();
 }
 nui_element_end();

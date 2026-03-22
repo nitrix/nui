@@ -9,7 +9,7 @@ void sw_fini(void);
 void sw_before_render(int width, int height);
 void sw_after_render(void);
 void sw_draw_rect(int x, int y, int width, int height, uint32_t color);
-void sw_draw_image(int x, int y, int width, int height, struct nui_image *image);
+void sw_draw_image(int x, int y, int width, int height, const struct nui_image *image);
 void sw_export(const char *filename);
 struct nui_image *sw_load_image_from_file(const char *filename);
 void sw_unload_image(struct nui_image *image);

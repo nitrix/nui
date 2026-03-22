@@ -1,4 +1,4 @@
-#include "glad/glad.h"
+#include "glad/gl.h"
 #include "GLFW/glfw3.h"
 #include "ngl.h"
 #include "nui.h"
@@ -63,7 +63,7 @@ int main(void) {
 
     glfwMakeContextCurrent(window);
 
-    if (!gladLoadGL()) {
+    if (!gladLoadGL(glfwGetProcAddress)) {
         fprintf(stderr, "Failed to initialize OpenGL\n");
         glfwDestroyWindow(window);
         glfwTerminate();
@@ -101,6 +101,7 @@ int main(void) {
     nui_viewport(fb_width, fb_height);
 
     struct nui_image *logo = nui_load_image_from_file("assets/nui.png");
+    struct nui_font *font = nui_load_font_from_file("assets/DejaVuSans.ttf", 64.0f);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -118,25 +119,24 @@ int main(void) {
 
             NUI {
                 nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
-                nui_fixed_width(1200);
+                nui_grow();
                 nui_background_color(BLUE);
-                nui_padding(32, 32, 32, 32);
-                nui_child_gap(32);
+                nui_padding(5, 5, 5, 5);
+                nui_child_gap(5);
+                nui_font(font);
 
                 NUI {
-                    nui_fixed(200, 200);
+                    nui_fixed_height(256);
+                    nui_grow_width();
                     nui_background_color(PINK);
                 }
 
                 NUI {
-                    nui_fixed_height(50);
+                    nui_fixed_height(256);
                     nui_grow_width();
-                    nui_background_color(YELLOW);
-                }
-
-                NUI {
-                    nui_fixed(200, 200);
-                    nui_background_color(LIGHT_BLUE);
+                    nui_background_color(PINK);
+                    nui_font_color(YELLOW);
+                    nui_text("Hello World!");
                 }
             }
 
@@ -147,6 +147,7 @@ int main(void) {
         glfwSwapBuffers(window);
     }
 
+    nui_unload_font(font);
     nui_unload_image(logo);
 
     nui_fini();

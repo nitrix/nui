@@ -1,5 +1,6 @@
 #include "nui.h"
 #include <assert.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -170,12 +171,17 @@ void nui_grow(void) {
     nui_grow_height();
 }
 
+void nui_font_color(uint32_t color) {
+    ctx.current->flags |= NUI_ELEMENT_FLAG_HAS_FONT_COLOR;
+    ctx.current->style.font_color = color;
+}
+
 void nui_background_color(uint32_t color) {
     ctx.current->flags |= NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR;
     ctx.current->style.background_color = color;
 }
 
-void nui_background_image(struct nui_image *image) {
+void nui_background_image(const struct nui_image *image) {
     ctx.current->style.background_image = image;
 }
 
@@ -443,6 +449,24 @@ void _nui_positioning_element(struct nui_element *el, int marker_x, int marker_y
     }
 }
 
+void _nui_fonting_element(struct nui_element *el, const struct nui_font *font, uint32_t font_color) {
+    if (el->style.font) {
+        font = el->style.font;
+    } else {
+        el->style.font = font;
+    }
+
+    if (el->flags & NUI_ELEMENT_FLAG_HAS_FONT_COLOR) {
+        font_color = el->style.font_color;
+    } else {
+        el->style.font_color = font_color;
+    }
+
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        _nui_fonting_element(child, font, font_color);
+    }
+}
+
 void nui_update(void) {
     // Order is VERY important.
 
@@ -463,6 +487,9 @@ void nui_update(void) {
 
     // 6 - Positioning pass.
     _nui_positioning_element(&ctx.root, 0, 0);
+
+    // Custom font pass.
+    _nui_fonting_element(&ctx.root, NULL, 0x000000000);
 }
 
 void _nui_render_element(struct nui_element *el) {
@@ -475,6 +502,10 @@ void _nui_render_element(struct nui_element *el) {
         ctx.backend->draw_image(el->x, el->y, el->w, el->h, el->style.background_image);
     } else if (color) { // Only draw if color is not fully transparent.
         ctx.backend->draw_rect(el->x, el->y, el->w, el->h, color);
+    }
+
+    if (el->text) {
+        ctx.backend->draw_text(el->style.font, el->x, el->y, el->text, el->style.font_color);
     }
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
@@ -496,4 +527,32 @@ struct nui_image *nui_load_image_from_file(const char *filename) {
 
 void nui_unload_image(struct nui_image *image) {
     ctx.backend->unload_image(image);
+}
+
+struct nui_font *nui_load_font_from_file(const char *filename, float font_size) {
+    return ctx.backend->load_font_from_file(filename, font_size);
+}
+
+void nui_unload_font(struct nui_font *font) {
+    ctx.backend->unload_font(font);
+}
+
+void nui_font(const struct nui_font *font) {
+    ctx.current->style.font = font;
+}
+
+void nui_text(const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    size_t n = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    char *buffer = ctx.memory.malloc(n + 1);
+
+    va_start(args, fmt);
+    vsnprintf(buffer, n + 1, fmt, args);
+    va_end(args);
+
+    ctx.current->text = buffer;
 }
