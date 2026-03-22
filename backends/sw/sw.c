@@ -1,10 +1,21 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#define STB_TRUETYPE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #include "nui.h"
 #include "stb_image.h"
+#include "stb_image_write.h"
+#include "stb_truetype.h"
 #include <stdint.h>
 #include <stdlib.h>
+
+struct sw_font {
+    unsigned char *pixels;
+    stbtt_bakedchar *baked;
+    size_t num_chars;
+    size_t pixels_width;
+    size_t pixels_height;
+    float ascent;
+};
 
 unsigned char *pixels = NULL;
 int max_x = 0;
@@ -149,4 +160,137 @@ void sw_export(const char *filepath) {
 
     stbi_write_png(filepath, max_x, max_y, 4, pixels, max_x * 4);
     free(pixels);
+}
+
+struct nui_font *sw_load_font_from_file(const char *filename, float font_size) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    unsigned char *font_buffer = malloc(file_size);
+    if (!font_buffer) {
+        fclose(file);
+        return NULL;
+    }
+
+    unsigned long long n = fread(font_buffer, 1, file_size, file);
+    fclose(file);
+
+    if (n != file_size) {
+        free(font_buffer);
+        return NULL;
+    }
+
+    size_t pixels_width = 512;
+    size_t pixels_height = 512;
+    char first_char = 32;
+    size_t num_chars = 255 - first_char;
+    unsigned char *pixels = malloc(pixels_width*pixels_height);
+    if (!pixels) {
+        free(font_buffer);
+        return NULL;
+    }
+
+    stbtt_bakedchar *baked = malloc(sizeof *baked * num_chars);
+    if (!baked) {
+        free(font_buffer);
+        free(pixels);
+        return NULL;
+    }
+
+    // TODO: Check for failures, try bigger image repeatedly.
+    stbtt_BakeFontBitmap(font_buffer, 0, font_size, pixels, pixels_width, pixels_height, first_char, num_chars, baked);
+
+    stbtt_fontinfo info;
+    stbtt_InitFont(&info, font_buffer, 0);
+
+    int ascent_int, descent_int, line_gap;
+    stbtt_GetFontVMetrics(&info, &ascent_int, &descent_int, &line_gap);
+
+    float scale = stbtt_ScaleForPixelHeight(&info, font_size);
+
+    free(font_buffer);
+
+    struct sw_font *sw_font = malloc(sizeof *sw_font);
+    if (!sw_font) {
+        free(pixels);
+        free(baked);
+        return NULL;
+    }
+
+    sw_font->pixels = pixels;
+    sw_font->baked = baked;
+    sw_font->num_chars = num_chars;
+    sw_font->pixels_width = pixels_width;
+    sw_font->pixels_height = pixels_height;
+    sw_font->ascent = ascent_int * scale;
+
+    struct nui_font *font = malloc(sizeof *font);
+    if (!font) {
+        free(pixels);
+        free(baked);
+        free(sw_font);
+        return NULL;
+    }
+
+    font->handle = sw_font;
+
+    return font;
+}
+
+void sw_unload_font(struct nui_font *font) {
+    struct sw_font *sw_font = font->handle;
+    free(sw_font->pixels);
+    free(sw_font->baked);
+    free(sw_font);
+    free(font);
+}
+
+void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
+    printf("SW_DRAW_TEXT\n");
+
+    struct sw_font *sw_font = font->handle;
+
+    float fx = 0;
+    float fy = sw_font->ascent;
+
+    while (*text) {
+        stbtt_aligned_quad q;
+
+        bool opengl = true;
+        stbtt_GetBakedQuad(sw_font->baked, sw_font->pixels_width, sw_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+
+        printf("char='%c' q.x0=%f q.y0=%f q.x1=%f q.y1=%f s0=%f t0=%f s1=%f t1=%f\n",
+            *text, q.x0, q.y0, q.x1, q.y1, q.s0, q.t0, q.s1, q.t1);
+
+        for (int iy = (int)q.y0; iy < (int)q.y1; iy++) {
+            for (int ix = (int)q.x0; ix < (int)q.x1; ix++) {
+                int px = x + ix;
+                int py = y + iy;
+
+                float u = q.s0 + (ix - q.x0) / (q.x1 - q.x0) * (q.s1 - q.s0);
+                float v = q.t0 + (iy - q.y0) / (q.y1 - q.y0) * (q.t1 - q.t0);
+
+                int ax = (int)(u * sw_font->pixels_width);
+                int ay = (int)(v * sw_font->pixels_height);
+
+                if (ax < 0) ax = 0;
+                if (ax >= (int)sw_font->pixels_width) ax = sw_font->pixels_width - 1;
+                if (ay < 0) ay = 0;
+                if (ay >= (int)sw_font->pixels_height) ay = sw_font->pixels_height - 1;
+
+                uint8_t a = sw_font->pixels[(sw_font->pixels_width * ay + ax)];
+                uint32_t src_color = ((color & 0xFFFFFF00) | a);
+
+                _blend_draw_at(px, py, src_color);
+            }
+        }
+
+        text++;
+    }
 }

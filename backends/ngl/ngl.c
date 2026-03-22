@@ -382,7 +382,6 @@ void ngl_draw_image(int x, int y, int w, int h, struct nui_image *image) {
 void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
     struct ngl_font *ngl_font = font->handle;
 
-
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, ngl_font->texture);
     glUniform1i(uniforms.texture, 0);
