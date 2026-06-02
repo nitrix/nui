@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 struct sw_font {
     unsigned char *font_buffer;
@@ -140,19 +141,61 @@ void _blend_draw_at(int x, int y, uint32_t src_color) {
     }
 }
 
-void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
-    // printf("sw_draw_rect: x=%d, y=%d, width=%d, height=%d, color=0x%08x\n", x, y, width, height, color);
+static bool _inside_round_rect(int px, int py, int x, int y, int width, int height, int radius) {
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    if (px < x || px >= x + width || py < y || py >= y + height) {
+        return false;
+    }
+
+    radius = MIN(radius, MIN(width, height) / 2);
+    if (radius <= 0) {
+        return true;
+    }
+
+    int left = x + radius;
+    int right = x + width - radius - 1;
+    int top = y + radius;
+    int bottom = y + height - radius - 1;
+    int cx = px < left ? left : (px > right ? right : px);
+    int cy = py < top ? top : (py > bottom ? bottom : py);
+    int dx = px - cx;
+    int dy = py - cy;
+
+    return dx * dx + dy * dy <= radius * radius;
+}
+
+void sw_draw_box(int x, int y, int width, int height, uint32_t fill, uint32_t border, int border_width, int radius) {
+    int outer_radius = MAX(0, radius);
+    int inner_x = x + border_width;
+    int inner_y = y + border_width;
+    int inner_width = width - border_width * 2;
+    int inner_height = height - border_width * 2;
+    int inner_radius = MAX(0, outer_radius - border_width);
 
     for (int h = 0; h < height; h++) {
         for (int w = 0; w < width; w++) {
             int px = w + x;
             int py = h + y;
+            if (!_inside_round_rect(px, py, x, y, width, height, outer_radius)) {
+                continue;
+            }
 
-            if (px >= 0 && px < max_x && py >= 0 && py < max_y) {
+            bool is_border = border_width > 0 && !_inside_round_rect(px, py, inner_x, inner_y, inner_width, inner_height, inner_radius);
+            uint32_t color = is_border ? border : fill;
+            if (color) {
                 _blend_draw_at(px, py, color);
             }
         }
     }
+}
+
+void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
+    // printf("sw_draw_rect: x=%d, y=%d, width=%d, height=%d, color=0x%08x\n", x, y, width, height, color);
+
+    sw_draw_box(x, y, width, height, color, 0x00000000, 0, 0);
 }
 
 void sw_draw_image(int x, int y, int width, int height, const struct nui_image *image, enum nui_image_mode mode) {

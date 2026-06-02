@@ -14,6 +14,13 @@ add_library(nui STATIC nui/nui.c)
 target_include_directories(nui PUBLIC nui)
 
 # =====================================
+# NUI Widgets
+# =====================================
+add_library(nuiw STATIC nui/nuiw.c)
+target_include_directories(nuiw PUBLIC nui)
+target_link_libraries(nuiw PUBLIC nui)
+
+# =====================================
 # NGL Backend
 # =====================================
 add_library(backend-ngl STATIC backends/ngl/ngl.c)
@@ -42,7 +49,7 @@ endif()
 # Example
 # =====================================
 add_executable(example main.c)
-target_link_libraries(example nui backend-ngl glad glfw)
+target_link_libraries(example nuiw nui backend-ngl glad glfw)
 target_compile_options(example PRIVATE -std=c23 -Wall -Wextra -pedantic)
 
 # target_compile_options(example PRIVATE -fsanitize=address,undefined)
@@ -63,7 +70,7 @@ endforeach()
 
 create_test_sourcelist(testlist test_runner.c ${testfiles_relative})
 add_executable(test_runner test_runner.c ${testfiles_fullpath})
-target_link_libraries(test_runner nui backend-sw)
+target_link_libraries(test_runner nuiw nui backend-sw)
 
 foreach(name ${testfiles_relative})
     string(REPLACE ".c" "" name ${name})

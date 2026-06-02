@@ -15,11 +15,55 @@ enum nui_image_mode {
     NUI_IMAGE_MODE_STRETCH,
 };
 
+enum nui_mouse_button {
+    NUI_MOUSE_BUTTON_LEFT,
+    NUI_MOUSE_BUTTON_RIGHT,
+    NUI_MOUSE_BUTTON_MIDDLE,
+    NUI_MOUSE_BUTTON_COUNT,
+};
+
+enum nui_key {
+    NUI_KEY_BACKSPACE,
+    NUI_KEY_DELETE,
+    NUI_KEY_LEFT,
+    NUI_KEY_RIGHT,
+    NUI_KEY_HOME,
+    NUI_KEY_END,
+    NUI_KEY_ENTER,
+    NUI_KEY_ESCAPE,
+    NUI_KEY_TAB,
+    NUI_KEY_COUNT,
+};
+
+enum nui_modifiers : uint32_t {
+    NUI_MODIFIER_SHIFT = (1 << 0),
+    NUI_MODIFIER_CTRL = (1 << 1),
+    NUI_MODIFIER_ALT = (1 << 2),
+    NUI_MODIFIER_SUPER = (1 << 3),
+};
+
+struct nui_input {
+    int mouse_x, mouse_y;
+    int mouse_delta_x, mouse_delta_y;
+    float scroll_x, scroll_y;
+    bool mouse_down[NUI_MOUSE_BUTTON_COUNT];
+    bool mouse_pressed[NUI_MOUSE_BUTTON_COUNT];
+    bool mouse_released[NUI_MOUSE_BUTTON_COUNT];
+    bool key_down[NUI_KEY_COUNT];
+    bool key_pressed[NUI_KEY_COUNT];
+    bool key_released[NUI_KEY_COUNT];
+    enum nui_modifiers modifiers;
+    char text[256];
+    size_t text_len;
+};
+
 enum nui_element_flags : uint32_t {
     NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR = (1 << 0),
     NUI_ELEMENT_FLAG_HAS_FONT_COLOR = (1 << 1),
     NUI_ELEMENT_FLAG_GROW_WIDTH = (1 << 2),
     NUI_ELEMENT_FLAG_GROW_HEIGHT = (1 << 3),
+    NUI_ELEMENT_FLAG_HAS_BORDER = (1 << 4),
+    NUI_ELEMENT_FLAG_HAS_CORNER_RADIUS = (1 << 5),
 };
 
 struct nui_image {
@@ -42,6 +86,9 @@ struct nui_element {
     enum nui_element_flags flags;
     struct {
         uint32_t background_color; // RGBA8888
+        uint32_t border_color; // RGBA8888
+        int border_width; // px
+        int corner_radius; // px
         uint32_t font_color; // RGBA8888
         const struct nui_image *background_image;
         const struct nui_font *font;
@@ -74,6 +121,7 @@ struct nui_backend {
     void (*fini)(void);
     void (*before_render)(int width, int height);
     void (*after_render)(void);
+    void (*draw_box)(int x, int y, int w, int h, uint32_t fill, uint32_t border, int border_width, int radius);
     void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
     void (*draw_image)(int x, int y, int w, int h, const struct nui_image *image, enum nui_image_mode mode);
     void (*draw_text)(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
@@ -94,12 +142,23 @@ void nui_frame(void);
 void nui_update(void);
 void nui_render(void);
 
+// Input.
+// Applications translate their own platform events into these calls; nui keeps
+// only a backend-neutral per-frame input snapshot.
+void nui_input_mouse_move(int x, int y);
+void nui_input_mouse_button(enum nui_mouse_button button, bool down);
+void nui_input_scroll(float dx, float dy);
+void nui_input_key(enum nui_key key, bool down, enum nui_modifiers modifiers);
+void nui_input_text_utf8(const char *text);
+const struct nui_input *nui_get_input(void);
+
 // Custom memory management.
 void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr));
 
 // Elements.
 void nui_element_begin(void);
 void nui_element_end(void);
+const struct nui_element *nui_current_element(void);
 
 // Layout.
 void nui_layout(enum nui_layout layout);
@@ -134,6 +193,8 @@ void nui_image_mode(enum nui_image_mode mode);
 
 // Styling.
 void nui_background_color(uint32_t color);
+void nui_border(uint32_t color, int width);
+void nui_corner_radius(int radius);
 void nui_background_image(const struct nui_image *image);
 void nui_font(const struct nui_font *font);
 void nui_font_color(uint32_t color);

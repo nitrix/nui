@@ -22,6 +22,7 @@ static struct {
     struct nui_backend *backend;
     struct nui_element root;
     struct nui_element *current;
+    struct nui_input input;
 } ctx;
 
 void _init_element(struct nui_element *el) {
@@ -132,6 +133,17 @@ void nui_frame(void) {
     ctx.root.first_child = NULL;
     ctx.root.last_child = NULL;
     ctx.root.children_count = 0;
+
+    ctx.input.mouse_delta_x = 0;
+    ctx.input.mouse_delta_y = 0;
+    ctx.input.scroll_x = 0;
+    ctx.input.scroll_y = 0;
+    ctx.input.text_len = 0;
+    ctx.input.text[0] = '\0';
+    memset(ctx.input.mouse_pressed, 0, sizeof ctx.input.mouse_pressed);
+    memset(ctx.input.mouse_released, 0, sizeof ctx.input.mouse_released);
+    memset(ctx.input.key_pressed, 0, sizeof ctx.input.key_pressed);
+    memset(ctx.input.key_released, 0, sizeof ctx.input.key_released);
 }
 
 void nui_viewport(int width, int height) {
@@ -142,6 +154,65 @@ void nui_viewport(int width, int height) {
 void nui_custom_memory(void *(*custom_malloc)(size_t size), void (*custom_free)(void *ptr)) {
     ctx.memory.malloc = custom_malloc;
     ctx.memory.free = custom_free;
+}
+
+void nui_input_mouse_move(int x, int y) {
+    ctx.input.mouse_delta_x += x - ctx.input.mouse_x;
+    ctx.input.mouse_delta_y += y - ctx.input.mouse_y;
+    ctx.input.mouse_x = x;
+    ctx.input.mouse_y = y;
+}
+
+void nui_input_mouse_button(enum nui_mouse_button button, bool down) {
+    if (button < 0 || button >= NUI_MOUSE_BUTTON_COUNT) {
+        return;
+    }
+
+    if (ctx.input.mouse_down[button] != down) {
+        ctx.input.mouse_pressed[button] = down;
+        ctx.input.mouse_released[button] = !down;
+    }
+
+    ctx.input.mouse_down[button] = down;
+}
+
+void nui_input_scroll(float dx, float dy) {
+    ctx.input.scroll_x += dx;
+    ctx.input.scroll_y += dy;
+}
+
+void nui_input_key(enum nui_key key, bool down, enum nui_modifiers modifiers) {
+    if (key < 0 || key >= NUI_KEY_COUNT) {
+        return;
+    }
+
+    if (ctx.input.key_down[key] != down) {
+        ctx.input.key_pressed[key] = down;
+        ctx.input.key_released[key] = !down;
+    }
+
+    ctx.input.key_down[key] = down;
+    ctx.input.modifiers = modifiers;
+}
+
+void nui_input_text_utf8(const char *text) {
+    if (!text) {
+        return;
+    }
+
+    size_t available = sizeof ctx.input.text - ctx.input.text_len - 1;
+    size_t len = strlen(text);
+    if (len > available) {
+        len = available;
+    }
+
+    memcpy(ctx.input.text + ctx.input.text_len, text, len);
+    ctx.input.text_len += len;
+    ctx.input.text[ctx.input.text_len] = '\0';
+}
+
+const struct nui_input *nui_get_input(void) {
+    return &ctx.input;
 }
 
 void nui_element_begin(void) {
@@ -166,6 +237,10 @@ void nui_element_begin(void) {
 void nui_element_end(void) {
     assert(ctx.current);
     ctx.current = ctx.current->parent;
+}
+
+const struct nui_element *nui_current_element(void) {
+    return ctx.current;
 }
 
 void nui_fixed_width(int width) {
@@ -204,6 +279,17 @@ void nui_background_color(uint32_t color) {
     ctx.current->style.background_color = color;
 }
 
+void nui_border(uint32_t color, int width) {
+    ctx.current->flags |= NUI_ELEMENT_FLAG_HAS_BORDER;
+    ctx.current->style.border_color = color;
+    ctx.current->style.border_width = width;
+}
+
+void nui_corner_radius(int radius) {
+    ctx.current->flags |= NUI_ELEMENT_FLAG_HAS_CORNER_RADIUS;
+    ctx.current->style.corner_radius = radius;
+}
+
 void nui_background_image(const struct nui_image *image) {
     ctx.current->style.background_image = image;
 }
@@ -217,6 +303,13 @@ void nui_padding(int top, int right, int bottom, int left) {
     ctx.current->padding.right = right;
     ctx.current->padding.bottom = bottom;
     ctx.current->padding.left = left;
+}
+
+void nui_margin(int top, int right, int bottom, int left) {
+    ctx.current->margin.top = top;
+    ctx.current->margin.right = right;
+    ctx.current->margin.bottom = bottom;
+    ctx.current->margin.left = left;
 }
 
 void nui_layout(enum nui_layout layout) {
@@ -271,6 +364,26 @@ int _measure_text_minimum_width(const struct nui_font *font, const char *text) {
     return minimum_width;
 }
 
+int _nui_margin_before(const struct nui_element *el, bool xaxis) {
+    return xaxis ? el->margin.left : el->margin.top;
+}
+
+int _nui_margin_after(const struct nui_element *el, bool xaxis) {
+    return xaxis ? el->margin.right : el->margin.bottom;
+}
+
+int _nui_margin_total(const struct nui_element *el, bool xaxis) {
+    return _nui_margin_before(el, xaxis) + _nui_margin_after(el, xaxis);
+}
+
+int _nui_outer_preferred(const struct nui_element *el, bool xaxis) {
+    return (xaxis ? el->preferred.width : el->preferred.height) + _nui_margin_total(el, xaxis);
+}
+
+int _nui_outer_minimum(const struct nui_element *el, bool xaxis) {
+    return (xaxis ? el->minimum.width : el->minimum.height) + _nui_margin_total(el, xaxis);
+}
+
 void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_fit_sizing_element(child, xaxis);
@@ -292,19 +405,19 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
             if (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) {
                 if (xaxis) {
-                    el->preferred.width += child->preferred.width;
-                    el->minimum.width += child->minimum.width;
+                    el->preferred.width += _nui_outer_preferred(child, true);
+                    el->minimum.width += _nui_outer_minimum(child, true);
                 } else {
-                    el->preferred.height = MAX(el->preferred.height, child->preferred.height);
-                    el->minimum.height = MAX(el->minimum.height, child->minimum.height);
+                    el->preferred.height = MAX(el->preferred.height, _nui_outer_preferred(child, false));
+                    el->minimum.height = MAX(el->minimum.height, _nui_outer_minimum(child, false));
                 }
             } else if (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) {
                 if (xaxis) {
-                    el->preferred.width = MAX(el->preferred.width, child->preferred.width);
-                    el->minimum.width = MAX(el->minimum.width, child->minimum.width);
+                    el->preferred.width = MAX(el->preferred.width, _nui_outer_preferred(child, true));
+                    el->minimum.width = MAX(el->minimum.width, _nui_outer_minimum(child, true));
                 } else {
-                    el->preferred.height += child->preferred.height;
-                    el->minimum.height += child->minimum.height;
+                    el->preferred.height += _nui_outer_preferred(child, false);
+                    el->minimum.height += _nui_outer_minimum(child, false);
                 }
             }
         }
@@ -519,7 +632,7 @@ int _nui_content_size(const struct nui_element *el, bool xaxis) {
 void _nui_shrink_children_along_axis(struct nui_element *el, bool xaxis) {
     int used = 0;
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        used += _nui_axis_size(child, xaxis);
+        used += _nui_axis_size(child, xaxis) + _nui_margin_total(child, xaxis);
     }
 
     if (el->children_count > 0) {
@@ -563,10 +676,10 @@ void _nui_shrink_children_across_axis(struct nui_element *el, bool xaxis) {
     int available = _nui_content_size(el, xaxis);
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        int child_size = _nui_axis_size(child, xaxis);
+        int child_size = _nui_axis_size(child, xaxis) + _nui_margin_total(child, xaxis);
         int child_minimum = _nui_axis_minimum(child, xaxis);
         if (child_size > available) {
-            _nui_set_axis_size(child, xaxis, MAX(child_minimum, available));
+            _nui_set_axis_size(child, xaxis, MAX(child_minimum, available - _nui_margin_total(child, xaxis)));
         }
     }
 }
@@ -598,7 +711,7 @@ void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
     if (along) {
         // Children sizes.
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-            remaining -= _nui_axis_size(child, xaxis);
+            remaining -= _nui_axis_size(child, xaxis) + _nui_margin_total(child, xaxis);
         }
 
         // Gaps between children.
@@ -618,9 +731,9 @@ void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
             bool grow = xaxis ? grow_width : grow_height;
             if (grow) {
                 if (xaxis) {
-                    child->w += remaining - child->w;
+                    child->w += MAX(0, remaining - _nui_margin_total(child, true)) - child->w;
                 } else {
-                    child->h += remaining - child->h;
+                    child->h += MAX(0, remaining - _nui_margin_total(child, false)) - child->h;
                 }
             }
         }
@@ -717,12 +830,12 @@ void _nui_positioning_element(struct nui_element *el, int marker_x, int marker_y
     marker_y += el->padding.top;
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        _nui_positioning_element(child, marker_x, marker_y);
+        _nui_positioning_element(child, marker_x + child->margin.left, marker_y + child->margin.top);
 
         // Layout.
         switch (el->layout) {
-            case NUI_LAYOUT_LEFT_TO_RIGHT: marker_x += child->w; break;
-            case NUI_LAYOUT_TOP_TO_BOTTOM: marker_y += child->h; break;
+            case NUI_LAYOUT_LEFT_TO_RIGHT: marker_x += child->margin.left + child->w + child->margin.right; break;
+            case NUI_LAYOUT_TOP_TO_BOTTOM: marker_y += child->margin.top + child->h + child->margin.bottom; break;
         }
 
         // Child gap.
@@ -784,8 +897,16 @@ void _nui_render_element(struct nui_element *el) {
 
     if (el->style.background_image) {
         ctx.backend->draw_image(el->x, el->y, el->w, el->h, el->style.background_image, el->image_mode);
-    } else if (color) { // Only draw if color is not fully transparent.
-        ctx.backend->draw_rect(el->x, el->y, el->w, el->h, color);
+    } else {
+        bool styled = (el->flags & (NUI_ELEMENT_FLAG_HAS_BORDER | NUI_ELEMENT_FLAG_HAS_CORNER_RADIUS)) != 0;
+        if (styled && ctx.backend->draw_box) {
+            uint32_t border = (el->flags & NUI_ELEMENT_FLAG_HAS_BORDER) ? el->style.border_color : 0x00000000;
+            int border_width = (el->flags & NUI_ELEMENT_FLAG_HAS_BORDER) ? el->style.border_width : 0;
+            int radius = (el->flags & NUI_ELEMENT_FLAG_HAS_CORNER_RADIUS) ? el->style.corner_radius : 0;
+            ctx.backend->draw_box(el->x, el->y, el->w, el->h, color, border, border_width, radius);
+        } else if (color) { // Only draw if color is not fully transparent.
+            ctx.backend->draw_rect(el->x, el->y, el->w, el->h, color);
+        }
     }
 
     if (el->image) {

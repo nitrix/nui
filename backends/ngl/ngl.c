@@ -15,7 +15,8 @@ static struct {
     int width, height;
 } viewport;
 static struct {
-    GLint position, size, color;
+    GLint position, size, color, border_color;
+    GLint border_width, radius;
     GLint viewport, image_mode;
     GLint texture, mode, image_size;
     GLint uv_offset, uv_scale;
@@ -77,6 +78,7 @@ void _load_shader(void) {
             float ndc_y = (pos.y / u_viewport.y) * -2 + 1;
 
             gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);
+            v_uv = a_uv;
 
             if (u_mode == 1) {
                 if (u_image_mode == 1) {
@@ -98,6 +100,10 @@ void _load_shader(void) {
 
         uniform int u_mode; // 0 = normal, 1 = image, 2 = text.
         uniform vec4 u_color;
+        uniform vec4 u_border_color;
+        uniform float u_border_width;
+        uniform float u_radius;
+        uniform vec2 u_size;
         uniform sampler2D u_texture;
 
         void main() {
@@ -107,7 +113,23 @@ void _load_shader(void) {
                 frag_color = u_color;
                 frag_color.a = texture(u_texture, v_uv).a;
             } else {
-                frag_color = u_color;
+                vec2 p = v_uv * u_size;
+                float radius = min(u_radius, min(u_size.x, u_size.y) * 0.5);
+                float border = max(u_border_width, 0.0);
+                float edge_distance = min(min(p.x, p.y), min(u_size.x - p.x, u_size.y - p.y));
+                bool border_pixel = border > 0.0 && edge_distance < border;
+
+                if (radius > 0.0) {
+                    vec2 half_size = u_size * 0.5;
+                    vec2 q = abs(p - half_size) - (half_size - vec2(radius));
+                    float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+                    if (dist > 0.0) {
+                        discard;
+                    }
+                    border_pixel = border > 0.0 && dist > -border;
+                }
+
+                frag_color = border_pixel ? u_border_color : u_color;
             }
         }
     );
@@ -156,6 +178,9 @@ void _load_shader(void) {
     uniforms.position = glGetUniformLocation(program, "u_position");
     uniforms.size = glGetUniformLocation(program, "u_size");
     uniforms.color = glGetUniformLocation(program, "u_color");
+    uniforms.border_color = glGetUniformLocation(program, "u_border_color");
+    uniforms.border_width = glGetUniformLocation(program, "u_border_width");
+    uniforms.radius = glGetUniformLocation(program, "u_radius");
     uniforms.viewport = glGetUniformLocation(program, "u_viewport");
     uniforms.texture = glGetUniformLocation(program, "u_texture");
     uniforms.mode = glGetUniformLocation(program, "u_mode");
@@ -396,16 +421,25 @@ void _color_to_floats(uint32_t color, float *r, float *g, float *b, float *a) {
     *a = (color & 0xFF) / 255.0f;
 }
 
-void ngl_draw_rect(int x, int y, int w, int h, uint32_t color) {
-    float r, g, b, a;
-    _color_to_floats(color, &r, &g, &b, &a);
+void ngl_draw_box(int x, int y, int w, int h, uint32_t fill, uint32_t border, int border_width, int radius) {
+    float fr, fg, fb, fa;
+    float rr, rg, rb, ra;
+    _color_to_floats(fill, &fr, &fg, &fb, &fa);
+    _color_to_floats(border, &rr, &rg, &rb, &ra);
 
-    glUniform4f(uniforms.color, r, g, b, a);
+    glUniform4f(uniforms.color, fr, fg, fb, fa);
+    glUniform4f(uniforms.border_color, rr, rg, rb, ra);
+    glUniform1f(uniforms.border_width, (float) border_width);
+    glUniform1f(uniforms.radius, (float) radius);
     glUniform2f(uniforms.position, (float) x, (float) y);
     glUniform2f(uniforms.size, (float) w, (float) h);
     glUniform1i(uniforms.mode, MODE_NORMAL);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void ngl_draw_rect(int x, int y, int w, int h, uint32_t color) {
+    ngl_draw_box(x, y, w, h, color, 0x00000000, 0, 0);
 }
 
 void ngl_draw_image(int x, int y, int w, int h, const struct nui_image *image, enum nui_image_mode mode) {
