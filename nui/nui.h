@@ -10,6 +10,12 @@ enum nui_layout {
     NUI_LAYOUT_TOP_TO_BOTTOM,
 };
 
+enum nui_align {
+    NUI_ALIGN_START,
+    NUI_ALIGN_CENTER,
+    NUI_ALIGN_END,
+};
+
 enum nui_image_mode {
     NUI_IMAGE_MODE_REPEAT,
     NUI_IMAGE_MODE_STRETCH,
@@ -79,6 +85,7 @@ struct nui_font {
 struct nui_element {
     // User-defined properties.
     enum nui_layout layout;
+    enum nui_align align;
     struct { int width, height; } fixed; // px
     struct { int top, right, bottom, left; } padding; // px
     struct { int top, right, bottom, left; } margin; // px
@@ -162,6 +169,8 @@ const struct nui_element *nui_current_element(void);
 
 // Layout.
 void nui_layout(enum nui_layout layout);
+// Align children along the axis perpendicular to the element layout.
+void nui_align(enum nui_align align);
 
 // Sizing.
 // By default, an element will automatically adapt itself to neatly "fit" all of its children.

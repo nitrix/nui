@@ -157,6 +157,22 @@ static void _control_box(uint64_t id, const struct nuiw_record *record, bool sel
     _box(fill, border, t->control_radius);
 }
 
+static void _combo_field_box(uint64_t id, const struct nuiw_record *record) {
+    const struct nuiw_theme *t = ctx.theme;
+    bool hot = ctx.hot_id == id || _hot(record);
+    uint32_t fill = hot ? t->control_low : t->input;
+    uint32_t border = (ctx.focused_id == id || record->open) ? t->focus_line : t->input_line;
+    _box(fill, border, t->control_radius);
+}
+
+static void _combo_item_box(uint64_t id, const struct nuiw_record *record, bool selected) {
+    const struct nuiw_theme *t = ctx.theme;
+    bool hot = ctx.hot_id == id || _hot(record);
+    uint32_t fill = selected ? t->selected_soft : (hot ? t->hover_soft : 0x00000000);
+    uint32_t border = selected ? t->accent : 0x00000000;
+    _box(fill, border, t->control_radius);
+}
+
 static void _remember(struct nuiw_record *record) {
     record->element = nui_current_element();
 }
@@ -173,6 +189,7 @@ static void _text_child(const char *text, uint32_t color) {
 static void _label_value_row_begin(void) {
     nui_element_begin();
     nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+    nui_align(NUI_ALIGN_CENTER);
     nui_child_gap(ctx.theme->gap);
 }
 
@@ -253,6 +270,7 @@ void nuiw_panel_end(void) {
 void nuiw_row_begin(void) {
     nui_element_begin();
     nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+    nui_align(NUI_ALIGN_CENTER);
     nui_child_gap(ctx.theme->gap);
 }
 
@@ -291,8 +309,7 @@ bool nuiw_button(const char *label) {
 
     nui_element_begin();
     {
-        nui_fixed_height(ctx.theme->control_height);
-        nui_padding(5, 10, 5, 10);
+        nui_padding(7, 7, 7, 7);
         _control_box(id, record, false);
         _remember(record);
         _text_child(label, ctx.active_id == id ? ctx.theme->accent_text : ctx.theme->control_text);
@@ -314,6 +331,7 @@ bool nuiw_checkbox(const char *label, bool *value) {
     nui_element_begin();
     {
         nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_align(NUI_ALIGN_CENTER);
         nui_fixed_height(ctx.theme->control_height);
         nui_padding(6, 8, 6, 8);
         nui_child_gap(8);
@@ -323,7 +341,6 @@ bool nuiw_checkbox(const char *label, bool *value) {
         nui_element_begin();
         {
             nui_fixed(14, 14);
-            nui_margin(1, 0, 0, 0);
             _box(checked ? ctx.theme->accent : ctx.theme->input, checked ? ctx.theme->accent : ctx.theme->input_line, ctx.theme->control_radius);
         }
         nui_element_end();
@@ -342,6 +359,7 @@ bool nuiw_radio(const char *label, bool selected) {
     nui_element_begin();
     {
         nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_align(NUI_ALIGN_CENTER);
         nui_fixed_height(ctx.theme->control_height);
         nui_padding(6, 8, 6, 8);
         nui_child_gap(8);
@@ -351,7 +369,6 @@ bool nuiw_radio(const char *label, bool selected) {
         nui_element_begin();
         {
             nui_fixed(14, 14);
-            nui_margin(1, 0, 0, 0);
             _box(selected ? ctx.theme->accent : ctx.theme->input, selected ? ctx.theme->accent : ctx.theme->input_line, 7);
         }
         nui_element_end();
@@ -365,12 +382,14 @@ bool nuiw_radio(const char *label, bool selected) {
 bool nuiw_slider_float(const char *label, float *value, float min, float max) {
     uint64_t id = _make_id(label);
     struct nuiw_record *record = _record(id);
+    uint64_t track_id = _hash_str(id, ":track");
+    struct nuiw_record *track_record = _record(track_id);
     const struct nui_input *input = nui_get_input();
     bool changed = false;
 
     _activate(id, record);
-    if (ctx.active_id == id && value && max > min && record->w > 0) {
-        float t = (float)(input->mouse_x - record->x) / (float)record->w;
+    if (ctx.active_id == id && value && max > min && track_record->w > 0) {
+        float t = (float)(input->mouse_x - track_record->x) / (float)track_record->w;
         if (t < 0) t = 0;
         if (t > 1) t = 1;
         float next = min + (max - min) * t;
@@ -393,9 +412,9 @@ bool nuiw_slider_float(const char *label, float *value, float min, float max) {
         nui_element_begin();
         {
             nui_fixed(fill_width, 10);
-            nui_margin(9, 0, 0, 0);
             nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
             _box(ctx.theme->control_low, ctx.theme->input_line, ctx.theme->control_radius);
+            _remember(track_record);
             nui_element_begin();
             {
                 nui_fixed(filled, 10);
@@ -468,10 +487,14 @@ bool nuiw_combo_begin(const char *label, const char *preview) {
         _text_child(label, ctx.theme->control_text);
         nui_element_begin();
         {
+            nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+            nui_align(NUI_ALIGN_CENTER);
             nui_fixed_height(ctx.theme->control_height);
             nui_padding(5, 8, 5, 8);
-            _control_box(id, record, record->open);
+            nui_child_gap(8);
+            _combo_field_box(id, record);
             _text_child(preview, ctx.theme->control_text);
+            _text_child(record->open ? "^" : "v", ctx.theme->control_text);
         }
         nui_element_end();
     }
@@ -496,9 +519,15 @@ bool nuiw_combo_item(const char *label, bool selected) {
     nui_element_begin();
     {
         nui_fixed_height(ctx.theme->control_height);
+        nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_align(NUI_ALIGN_CENTER);
         nui_padding(5, 8, 5, 8);
-        _control_box(id, record, selected);
+        nui_child_gap(6);
+        _combo_item_box(id, record, selected);
         _remember(record);
+        if (selected) {
+            _text_child("*", ctx.theme->accent);
+        }
         _text_child(label, ctx.theme->control_text);
     }
     nui_element_end();
@@ -523,8 +552,7 @@ bool nuiw_tab(const char *label, bool selected) {
 
     nui_element_begin();
     {
-        nui_fixed_height(ctx.theme->control_height + 2);
-        nui_padding(5, 10, 5, 10);
+        nui_padding(7, 7, 7, 7);
         _control_box(id, record, selected);
         _remember(record);
         _text_child(label, ctx.theme->control_text);
@@ -545,6 +573,7 @@ bool nuiw_tree_row(const char *label, bool *open, bool selected) {
     nui_element_begin();
     {
         nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);
+        nui_align(NUI_ALIGN_CENTER);
         nui_fixed_height(ctx.theme->control_height);
         nui_padding(5, 8, 5, 8);
         nui_child_gap(6);

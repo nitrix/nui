@@ -316,6 +316,10 @@ void nui_layout(enum nui_layout layout) {
     ctx.current->layout = layout;
 }
 
+void nui_align(enum nui_align align) {
+    ctx.current->align = align;
+}
+
 void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
@@ -821,6 +825,16 @@ void _nui_wrap_text_element(struct nui_element *el) {
     }
 }
 
+int _nui_alignment_offset(enum nui_align align, int available, int child_outer_size) {
+    int space = MAX(0, available - child_outer_size);
+    switch (align) {
+        case NUI_ALIGN_CENTER: return space / 2;
+        case NUI_ALIGN_END: return space;
+        case NUI_ALIGN_START: return 0;
+    }
+    return 0;
+}
+
 void _nui_positioning_element(struct nui_element *el, int marker_x, int marker_y) {
     el->x = marker_x;
     el->y = marker_y;
@@ -830,7 +844,20 @@ void _nui_positioning_element(struct nui_element *el, int marker_x, int marker_y
     marker_y += el->padding.top;
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-        _nui_positioning_element(child, marker_x + child->margin.left, marker_y + child->margin.top);
+        int child_x = marker_x + child->margin.left;
+        int child_y = marker_y + child->margin.top;
+
+        if (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) {
+            int content_h = _nui_content_size(el, false);
+            int child_outer_h = child->margin.top + child->h + child->margin.bottom;
+            child_y += _nui_alignment_offset(el->align, content_h, child_outer_h);
+        } else if (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) {
+            int content_w = _nui_content_size(el, true);
+            int child_outer_w = child->margin.left + child->w + child->margin.right;
+            child_x += _nui_alignment_offset(el->align, content_w, child_outer_w);
+        }
+
+        _nui_positioning_element(child, child_x, child_y);
 
         // Layout.
         switch (el->layout) {

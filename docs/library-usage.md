@@ -14,6 +14,76 @@
 
 * After declaring your UI, `nui_update()` and `nui_render()` have to be called to calculate various properties of the elements and to render them.
 
+## Input
+
+`nui` owns platform-agnostic input state, but it does not own a platform layer.
+Applications translate their own windowing library events into calls like:
+
+```c
+nui_input_mouse_move(x, y);
+nui_input_mouse_button(NUI_MOUSE_BUTTON_LEFT, down);
+nui_input_key(NUI_KEY_BACKSPACE, down, modifiers);
+nui_input_text_utf8(text);
+```
+
+Transient input such as `pressed`, `released`, scroll, mouse delta, and text
+input is cleared by `nui_frame()`. A typical frame therefore looks like this:
+
+```c
+nui_frame();
+poll_platform_events_and_feed_nui_input();
+
+// Declare UI here.
+
+nui_update();
+nui_render();
+```
+
+Persistent state such as whether a mouse button or key is down remains available
+across frames through `nui_get_input()`.
+
+## Widgets
+
+The optional `nuiw` layer builds immediate-mode controls on top of regular
+`nui` elements. It consumes the core input snapshot and keeps only interaction
+state such as hot, active, focused, selected, and open combo IDs.
+
+For widgets, call `nuiw_begin_frame()` after feeding input, then call
+`nuiw_end_frame()` after `nui_update()` so widgets can harvest computed element
+rectangles for next-frame hit testing:
+
+```c
+nui_frame();
+poll_platform_events_and_feed_nui_input();
+nuiw_begin_frame();
+
+NUI {
+    nuiw_panel_begin();
+        if (nuiw_button("Apply")) {
+            // Respond to click.
+        }
+    nuiw_panel_end();
+}
+
+nui_update();
+nuiw_end_frame();
+nui_render();
+```
+
+When labels are not unique, push an ID scope around repeated widgets:
+
+```c
+for (uint64_t i = 0; i < count; i++) {
+    nuiw_push_id_u64(i);
+    nuiw_checkbox("Visible", &items[i].visible);
+    nuiw_pop_id();
+}
+```
+
+`nuiw_theme_high_contrast()` is the first built-in widget theme. It follows the
+High Contrast look: very dark panels, bright text, orange active/selected
+states, blue focus, tight padding, small radii, and crisp borders.
+
 ## Backends
 
 The backends are plug-and-play, some of them even coming with the library. `ngl` is an OpenGL renderer while `sw` is a software renderer to PNG images for testing.

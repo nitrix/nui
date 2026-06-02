@@ -106,6 +106,9 @@ int main(void) {
     nui_viewport(fb_width, fb_height);
 
     struct nui_font *font = nui_load_font_from_file("assets/DejaVuSans.ttf", 14.0f);
+    struct nui_font *font_small = nui_load_font_from_file("assets/DejaVuSans.ttf", 11.0f);
+    struct nui_font *font_large = nui_load_font_from_file("assets/DejaVuSans.ttf", 22.0f);
+    struct nui_font *font_title = nui_load_font_from_file("assets/DejaVuSans.ttf", 30.0f);
     char name[64] = "Cube.001";
     bool visible = true;
     bool selectable = true;
@@ -139,16 +142,8 @@ int main(void) {
 
             nuiw_panel_begin();
                 nui_fixed_width(230);
-                NUI {
-                    nui_font_color(nuiw_theme_high_contrast()->accent);
-                    nui_text("nui demo");
-                }
-                NUI {
-                    nui_font_color(0xb8c0ccff);
-                    nui_text("Immediate-mode widgets");
-                }
-                if (nuiw_tab("Overview", demo_page == 0)) demo_page = 0;
-                if (nuiw_tab("Buttons", demo_page == 1)) demo_page = 1;
+                if (nuiw_tab("Buttons", demo_page == 0)) demo_page = 0;
+                if (nuiw_tab("Text", demo_page == 1)) demo_page = 1;
                 if (nuiw_tab("Inputs", demo_page == 2)) demo_page = 2;
                 if (nuiw_tab("Sliders", demo_page == 3)) demo_page = 3;
                 if (nuiw_tab("Selection", demo_page == 4)) demo_page = 4;
@@ -159,33 +154,6 @@ int main(void) {
             nuiw_panel_begin();
                 nui_grow();
                 if (demo_page == 0) {
-                    NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("High Contrast widget demo");
-                    }
-                    nuiw_row_begin();
-                        nuiw_button("Run");
-                        nuiw_button("Apply");
-                        nuiw_button("Reset");
-                    nuiw_row_end();
-                    nuiw_checkbox("Visible in viewport", &visible);
-                    nuiw_checkbox("Selectable", &selectable);
-                    nuiw_slider_float("Scale", &scale, 0.0f, 1.0f);
-                    NUI {
-                        nui_fixed(420, 180);
-                        nui_background_color(0x10151bff);
-                        nui_border(nuiw_theme_high_contrast()->line, 1);
-                        nui_corner_radius(nuiw_theme_high_contrast()->radius);
-                        nui_padding(16, 16, 16, 16);
-                        NUI {
-                            nui_fixed(110, 110);
-                            nui_margin(22, 0, 0, 140);
-                            nui_background_color(0xff8a2261);
-                            nui_border(nuiw_theme_high_contrast()->accent, 2);
-                            nui_corner_radius(4);
-                        }
-                    }
-                } else if (demo_page == 1) {
                     NUI {
                         nui_font_color(nuiw_theme_high_contrast()->accent);
                         nui_text("Buttons");
@@ -201,10 +169,47 @@ int main(void) {
                         if (nuiw_tab("Sculpt", radio_mode == 2)) radio_mode = 2;
                     nuiw_row_end();
                     nuiw_checkbox("Show bounds", &show_bounds);
+                } else if (demo_page == 1) {
+                    NUI {
+                        nui_font_color(nuiw_theme_high_contrast()->accent);
+                        nui_text("Text");
+                    }
+                    NUI {
+                        nui_font(font_title);
+                        nui_font_color(nuiw_theme_high_contrast()->accent);
+                        nui_text("Large accent heading");
+                    }
+                    NUI {
+                        nui_font(font_large);
+                        nui_font_color(0xf2f4f8ff);
+                        nui_text("DejaVu Sans at 22 px");
+                    }
+                    NUI {
+                        nui_font(font_small);
+                        nui_font_color(0xb8c0ccff);
+                        nui_text("Small muted supporting text");
+                    }
+                    nuiw_row_begin();
+                        NUI {
+                            nui_font(font);
+                            nui_font_color(nuiw_theme_high_contrast()->control_text);
+                            nui_text("Default");
+                        }
+                        NUI {
+                            nui_font(font_large);
+                            nui_font_color(0x5ca4ffff);
+                            nui_text("Blue large");
+                        }
+                        NUI {
+                            nui_font(font_small);
+                            nui_font_color(nuiw_theme_high_contrast()->danger_text);
+                            nui_text("Small warning");
+                        }
+                    nuiw_row_end();
                 } else if (demo_page == 2) {
                     NUI {
                         nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Text and combo inputs");
+                        nui_text("Inputs and dropdowns");
                     }
                     nuiw_input_text("Object name", name, sizeof name);
                     bool combo_open = nuiw_combo_begin("Pivot", pivot);
@@ -274,6 +279,9 @@ int main(void) {
         glfwSwapBuffers(window);
     }
 
+    nui_unload_font(font_title);
+    nui_unload_font(font_large);
+    nui_unload_font(font_small);
     nui_unload_font(font);
     nuiw_fini();
     nui_fini();
