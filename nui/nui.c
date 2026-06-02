@@ -230,13 +230,6 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
             }
         }
 
-        // Padding.
-        if (xaxis) {
-            el->w += el->padding.left + el->padding.right;
-        } else {
-            el->h += el->padding.top + el->padding.bottom;
-        }
-
         // Gaps.
         if (el->children_count > 0) {
             bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
@@ -247,6 +240,24 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
                     el->h += el->child_gap * (el->children_count - 1);
                 }
             }
+        }
+
+        // Text content.
+        if (el->text && el->style.font && ctx.backend->measure_text) {
+            int text_width, text_height;
+            ctx.backend->measure_text(el->style.font, el->text, &text_width, &text_height);
+            if (xaxis) {
+                el->w = MAX(el->w, text_width);
+            } else {
+                el->h = MAX(el->h, text_height);
+            }
+        }
+
+        // Padding.
+        if (xaxis) {
+            el->w += el->padding.left + el->padding.right;
+        } else {
+            el->h += el->padding.top + el->padding.bottom;
         }
     }
 }
@@ -470,26 +481,26 @@ void _nui_fonting_element(struct nui_element *el, const struct nui_font *font, u
 void nui_update(void) {
     // Order is VERY important.
 
-    // 1 - Fit sizing widths pass.
+    // 1 - Custom font pass.
+    _nui_fonting_element(&ctx.root, NULL, 0x000000000);
+
+    // 2 - Fit sizing widths pass.
     _nui_fit_sizing_element(&ctx.root, true);
-    // 2 - Grow and shrink sizing widths pass.
+    // 3 - Grow and shrink sizing widths pass.
     _nui_grow_sizing_element(&ctx.root, true);
     // _nui_shrink_sizing_element();
 
-    // 3 - Wrap text pass.
+    // 4 - Wrap text pass.
     // _nui_wrap_text_pass();
 
-    // 4 - Fit sizing heights pass.
+    // 5 - Fit sizing heights pass.
     _nui_fit_sizing_element(&ctx.root, false);
-    // 5 - Grow and shrink sizing heights pass.
+    // 6 - Grow and shrink sizing heights pass.
     // _nui_shrink_sizing_element(&ctx.root, false);
     _nui_grow_sizing_element(&ctx.root, false);
 
-    // 6 - Positioning pass.
+    // 7 - Positioning pass.
     _nui_positioning_element(&ctx.root, 0, 0);
-
-    // Custom font pass.
-    _nui_fonting_element(&ctx.root, NULL, 0x000000000);
 }
 
 void _nui_render_element(struct nui_element *el) {

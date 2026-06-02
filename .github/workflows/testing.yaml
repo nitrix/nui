@@ -32,6 +32,16 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
           ninja test_runner
           ninja test
+      - name: Upload test outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-output
+          path: |
+            tests/output/**/*.png
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   testsLinux:
     name: Tests (Linux)
@@ -58,6 +68,16 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
           ninja test_runner
           ninja test
+      - name: Upload test outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-output
+          path: |
+            tests/output/**/*.png
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   testsMacOS:
     name: Tests (MacOS)
@@ -87,3 +107,13 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
           ninja test_runner
           ninja test
+      - name: Upload test outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-output
+          path: |
+            tests/output/**/*.png
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 7

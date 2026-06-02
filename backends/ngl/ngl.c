@@ -379,6 +379,36 @@ void ngl_draw_image(int x, int y, int w, int h, struct nui_image *image) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
+void ngl_measure_text(const struct nui_font *font, const char *text, int *width, int *height) {
+    *width = 0;
+    *height = 0;
+
+    if (!font || !text) {
+        return;
+    }
+
+    struct ngl_font *ngl_font = font->handle;
+
+    float fx = 0;
+    float fy = ngl_font->ascent;
+
+    while (*text) {
+        stbtt_aligned_quad q;
+
+        bool opengl = true;
+        stbtt_GetBakedQuad(ngl_font->baked, ngl_font->pixels_width, ngl_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+
+        if ((int)q.x1 > *width) {
+            *width = (int)q.x1;
+        }
+        if ((int)q.y1 > *height) {
+            *height = (int)q.y1;
+        }
+
+        text++;
+    }
+}
+
 void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
     struct ngl_font *ngl_font = font->handle;
 

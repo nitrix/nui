@@ -67,6 +67,7 @@ struct nui_backend {
     void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
     void (*draw_image)(int x, int y, int w, int h, const struct nui_image *image);
     void (*draw_text)(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
+    void (*measure_text)(const struct nui_font *font, const char *text, int *width, int *height);
     struct nui_image *(*load_image_from_file)(const char *filename);
     void (*unload_image)(struct nui_image *image);
     struct nui_font *(*load_font_from_file)(const char *filename, float font_size);

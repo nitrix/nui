@@ -251,6 +251,36 @@ void sw_unload_font(struct nui_font *font) {
     free(font);
 }
 
+void sw_measure_text(const struct nui_font *font, const char *text, int *width, int *height) {
+    *width = 0;
+    *height = 0;
+
+    if (!font || !text) {
+        return;
+    }
+
+    struct sw_font *sw_font = font->handle;
+
+    float fx = 0;
+    float fy = sw_font->ascent;
+
+    while (*text) {
+        stbtt_aligned_quad q;
+
+        bool opengl = true;
+        stbtt_GetBakedQuad(sw_font->baked, sw_font->pixels_width, sw_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+
+        if ((int)q.x1 > *width) {
+            *width = (int)q.x1;
+        }
+        if ((int)q.y1 > *height) {
+            *height = (int)q.y1;
+        }
+
+        text++;
+    }
+}
+
 void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
     printf("SW_DRAW_TEXT\n");
 

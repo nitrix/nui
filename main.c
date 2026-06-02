@@ -135,8 +135,13 @@ int main(void) {
                     nui_fixed_height(256);
                     nui_grow_width();
                     nui_background_color(PINK);
-                    nui_font_color(YELLOW);
-                    nui_text("Hello World!");
+
+                    NUI {
+                        nui_padding(30, 30, 0, 0);
+                        nui_background_color(0x000000ff);
+                        nui_font_color(YELLOW);
+                        nui_text("Hello World!");
+                    }
                 }
             }
 
