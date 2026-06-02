@@ -127,7 +127,7 @@ int main(void) {
 
                 NUI {
                     nui_fixed_height(256);
-                    nui_grow_width();
+                    nui_fixed_width(100);
                     nui_background_color(PINK);
                 }
 
@@ -139,8 +139,14 @@ int main(void) {
                     NUI {
                         nui_background_color(0x000000ff);
                         nui_font_color(YELLOW);
-                        nui_text("Hello World!");
+                        nui_text("A quick brown fox jumped over the lazy dog.");
                     }
+                }
+
+                NUI {
+                    nui_fixed_height(256);
+                    nui_fixed_width(100);
+                    nui_background_color(PINK);
                 }
             }
 

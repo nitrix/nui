@@ -48,10 +48,13 @@ struct nui_element {
     } style;
     enum nui_image_mode image_mode;
     const struct nui_image *image;
-    const char *text;
+    char *text;
+    char *wrapped_text;
 
     // Position and size which gets computed during the update phase.
     int x, y, w, h; // px
+    struct { int width, height; } preferred; // px
+    struct { int width, height; } minimum; // px
 
     // Hierarchy.
     // Quite intrusive by having elements point to their parent and siblings directly.

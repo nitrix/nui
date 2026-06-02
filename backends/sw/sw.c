@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+
 struct sw_font {
     unsigned char *pixels;
     stbtt_bakedchar *baked;
@@ -15,6 +17,7 @@ struct sw_font {
     size_t pixels_width;
     size_t pixels_height;
     float ascent;
+    float line_height;
 };
 
 struct sw_text_bounds {
@@ -238,6 +241,7 @@ struct nui_font *sw_load_font_from_file(const char *filename, float font_size) {
     sw_font->pixels_width = pixels_width;
     sw_font->pixels_height = pixels_height;
     sw_font->ascent = ascent_int * scale;
+    sw_font->line_height = (ascent_int - descent_int + line_gap) * scale;
 
     struct nui_font *font = malloc(sizeof *font);
     if (!font) {
@@ -260,16 +264,21 @@ void sw_unload_font(struct nui_font *font) {
     free(font);
 }
 
-static bool _sw_measure_text_bounds(const struct sw_font *font, const char *text, struct sw_text_bounds *bounds) {
+static bool _sw_measure_text_line_bounds(const struct sw_font *font, const char *text, size_t len, struct sw_text_bounds *bounds) {
     float fx = 0;
     float fy = font->ascent;
     bool has_bounds = false;
 
-    while (*text) {
+    for (size_t i = 0; i < len; i++) {
         stbtt_aligned_quad q;
+        unsigned char ch = (unsigned char)text[i];
+
+        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+            continue;
+        }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
 
         if (!has_bounds) {
             bounds->min_x = (int) q.x0;
@@ -283,7 +292,47 @@ static bool _sw_measure_text_bounds(const struct sw_font *font, const char *text
             if ((int) q.x1 > bounds->max_x) bounds->max_x = (int) q.x1;
             if ((int) q.y1 > bounds->max_y) bounds->max_y = (int) q.y1;
         }
-        text++;
+    }
+
+    return has_bounds;
+}
+
+static bool _sw_measure_text_bounds(const struct sw_font *font, const char *text, struct sw_text_bounds *bounds) {
+    int max_width = 0;
+    int max_height = 0;
+    bool has_bounds = false;
+    size_t line_index = 0;
+
+    for (const char *line = text; ; line_index++) {
+        const char *line_end = line;
+        while (*line_end && *line_end != '\n') {
+            line_end++;
+        }
+
+        struct sw_text_bounds line_bounds;
+        size_t line_len = (size_t)(line_end - line);
+        if (_sw_measure_text_line_bounds(font, line, line_len, &line_bounds)) {
+            int line_width = line_bounds.max_x - line_bounds.min_x;
+            max_width = MAX(max_width, line_width);
+
+            int line_height = line_bounds.max_y - line_bounds.min_y;
+            int line_bottom = (int)(line_index * font->line_height) + line_height;
+            max_height = MAX(max_height, line_bottom);
+            has_bounds = true;
+        }
+
+        if (!*line_end) {
+            break;
+        }
+
+        line = line_end + 1;
+    }
+
+    if (has_bounds) {
+        bounds->min_x = 0;
+        bounds->max_x = max_width;
+        bounds->min_y = 0;
+        bounds->max_y = max_height;
     }
 
     return has_bounds;
@@ -307,27 +356,25 @@ void sw_measure_text(const struct nui_font *font, const char *text, int *width, 
     *height = bounds.max_y - bounds.min_y;
 }
 
-void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
-    printf("SW_DRAW_TEXT\n");
-
-    struct sw_font *sw_font = font->handle;
+static void _sw_draw_text_line(const struct sw_font *font, int x, int y, const char *text, size_t len, uint32_t color) {
     struct sw_text_bounds bounds;
-
-    if (!_sw_measure_text_bounds(sw_font, text, &bounds)) {
+    if (!_sw_measure_text_line_bounds(font, text, len, &bounds)) {
         return;
     }
 
     float fx = 0;
-    float fy = sw_font->ascent;
+    float fy = font->ascent;
 
-    while (*text) {
+    for (size_t i = 0; i < len; i++) {
         stbtt_aligned_quad q;
+        unsigned char ch = (unsigned char)text[i];
+
+        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+            continue;
+        }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(sw_font->baked, sw_font->pixels_width, sw_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
-
-        printf("char='%c' q.x0=%f q.y0=%f q.x1=%f q.y1=%f s0=%f t0=%f s1=%f t1=%f\n",
-            *text, q.x0, q.y0, q.x1, q.y1, q.s0, q.t0, q.s1, q.t1);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
 
         for (int iy = (int)q.y0; iy < (int)q.y1; iy++) {
             for (int ix = (int)q.x0; ix < (int)q.x1; ix++) {
@@ -337,21 +384,40 @@ void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, u
                 float u = q.s0 + (ix - q.x0) / (q.x1 - q.x0) * (q.s1 - q.s0);
                 float v = q.t0 + (iy - q.y0) / (q.y1 - q.y0) * (q.t1 - q.t0);
 
-                int ax = (int)(u * sw_font->pixels_width);
-                int ay = (int)(v * sw_font->pixels_height);
+                int ax = (int)(u * font->pixels_width);
+                int ay = (int)(v * font->pixels_height);
 
                 if (ax < 0) ax = 0;
-                if (ax >= (int)sw_font->pixels_width) ax = sw_font->pixels_width - 1;
+                if (ax >= (int)font->pixels_width) ax = font->pixels_width - 1;
                 if (ay < 0) ay = 0;
-                if (ay >= (int)sw_font->pixels_height) ay = sw_font->pixels_height - 1;
+                if (ay >= (int)font->pixels_height) ay = font->pixels_height - 1;
 
-                uint8_t a = sw_font->pixels[(sw_font->pixels_width * ay + ax)];
+                uint8_t a = font->pixels[(font->pixels_width * ay + ax)];
                 uint32_t src_color = ((color & 0xFFFFFF00) | a);
 
                 _blend_draw_at(px, py, src_color);
             }
         }
+    }
+}
 
-        text++;
+void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
+    struct sw_font *sw_font = font->handle;
+    size_t line_index = 0;
+
+    for (const char *line = text; ; line_index++) {
+        const char *line_end = line;
+        while (*line_end && *line_end != '\n') {
+            line_end++;
+        }
+
+        int line_y = y + (int)(line_index * sw_font->line_height);
+        _sw_draw_text_line(sw_font, x, line_y, line, (size_t)(line_end - line), color);
+
+        if (!*line_end) {
+            break;
+        }
+
+        line = line_end + 1;
     }
 }

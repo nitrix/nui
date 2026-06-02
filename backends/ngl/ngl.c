@@ -7,6 +7,8 @@
 #include "stb_truetype.h"
 #include <stdio.h>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+
 static GLuint program;
 static GLuint vao, vbo;
 static struct {
@@ -31,6 +33,7 @@ struct ngl_font {
     size_t pixels_width;
     size_t pixels_height;
     float ascent;
+    float line_height;
 };
 
 struct ngl_text_bounds {
@@ -314,6 +317,7 @@ struct nui_font *ngl_load_font_from_file(const char *filename, float font_size) 
     ngl_font->pixels_width = pixels_width;
     ngl_font->pixels_height = pixels_height;
     ngl_font->ascent = ascent_int * scale;
+    ngl_font->line_height = (ascent_int - descent_int + line_gap) * scale;
 
     struct nui_font *font = malloc(sizeof *font);
     if (!font) {
@@ -393,16 +397,21 @@ void ngl_draw_image(int x, int y, int w, int h, const struct nui_image *image, e
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-static bool _ngl_measure_text_bounds(const struct ngl_font *font, const char *text, struct ngl_text_bounds *bounds) {
+static bool _ngl_measure_text_line_bounds(const struct ngl_font *font, const char *text, size_t len, struct ngl_text_bounds *bounds) {
     float fx = 0;
     float fy = font->ascent;
     bool has_bounds = false;
 
-    while (*text) {
+    for (size_t i = 0; i < len; i++) {
         stbtt_aligned_quad q;
+        unsigned char ch = (unsigned char)text[i];
+
+        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+            continue;
+        }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
 
         if (!has_bounds) {
             bounds->min_x = (int) q.x0;
@@ -416,7 +425,47 @@ static bool _ngl_measure_text_bounds(const struct ngl_font *font, const char *te
             if ((int) q.x1 > bounds->max_x) bounds->max_x = (int) q.x1;
             if ((int) q.y1 > bounds->max_y) bounds->max_y = (int) q.y1;
         }
-        text++;
+    }
+
+    return has_bounds;
+}
+
+static bool _ngl_measure_text_bounds(const struct ngl_font *font, const char *text, struct ngl_text_bounds *bounds) {
+    int max_width = 0;
+    int max_height = 0;
+    bool has_bounds = false;
+    size_t line_index = 0;
+
+    for (const char *line = text; ; line_index++) {
+        const char *line_end = line;
+        while (*line_end && *line_end != '\n') {
+            line_end++;
+        }
+
+        struct ngl_text_bounds line_bounds;
+        size_t line_len = (size_t)(line_end - line);
+        if (_ngl_measure_text_line_bounds(font, line, line_len, &line_bounds)) {
+            int line_width = line_bounds.max_x - line_bounds.min_x;
+            max_width = MAX(max_width, line_width);
+
+            int line_height = line_bounds.max_y - line_bounds.min_y;
+            int line_bottom = (int)(line_index * font->line_height) + line_height;
+            max_height = MAX(max_height, line_bottom);
+            has_bounds = true;
+        }
+
+        if (!*line_end) {
+            break;
+        }
+
+        line = line_end + 1;
+    }
+
+    if (has_bounds) {
+        bounds->min_x = 0;
+        bounds->max_x = max_width;
+        bounds->min_y = 0;
+        bounds->max_y = max_height;
     }
 
     return has_bounds;
@@ -440,30 +489,25 @@ void ngl_measure_text(const struct nui_font *font, const char *text, int *width,
     *height = bounds.max_y - bounds.min_y;
 }
 
-void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
-    struct ngl_font *ngl_font = font->handle;
+static void _ngl_draw_text_line(const struct ngl_font *font, int x, int y, const char *text, size_t len, uint32_t color) {
     struct ngl_text_bounds bounds;
-
-    if (!_ngl_measure_text_bounds(ngl_font, text, &bounds)) {
+    if (!_ngl_measure_text_line_bounds(font, text, len, &bounds)) {
         return;
     }
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, ngl_font->texture);
-    glUniform1i(uniforms.texture, 0);
-    glUniform1i(uniforms.mode, MODE_TEXT);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
     float fx = 0;
-    float fy = ngl_font->ascent;
+    float fy = font->ascent;
 
-    while (*text) {
+    for (size_t i = 0; i < len; i++) {
         stbtt_aligned_quad q;
+        unsigned char ch = (unsigned char)text[i];
+
+        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+            continue;
+        }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(ngl_font->baked, ngl_font->pixels_width, ngl_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
 
         glUniform2f(uniforms.uv_offset, q.s0, q.t0);
         glUniform2f(uniforms.uv_scale, q.s1 - q.s0, q.t1 - q.t0);
@@ -477,6 +521,34 @@ void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, 
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        text++;
+    }
+}
+
+void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
+    struct ngl_font *ngl_font = font->handle;
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, ngl_font->texture);
+    glUniform1i(uniforms.texture, 0);
+    glUniform1i(uniforms.mode, MODE_TEXT);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    size_t line_index = 0;
+    for (const char *line = text; ; line_index++) {
+        const char *line_end = line;
+        while (*line_end && *line_end != '\n') {
+            line_end++;
+        }
+
+        int line_y = y + (int)(line_index * ngl_font->line_height);
+        _ngl_draw_text_line(ngl_font, x, line_y, line, (size_t)(line_end - line), color);
+
+        if (!*line_end) {
+            break;
+        }
+
+        line = line_end + 1;
     }
 }

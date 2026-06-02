@@ -33,6 +33,22 @@ void _init_element(struct nui_element *el) {
     *el = template;
 }
 
+void _free_element_content(struct nui_element *el) {
+    if (el->text) {
+        ctx.memory.free(el->text);
+        el->text = NULL;
+    }
+
+    if (el->wrapped_text) {
+        ctx.memory.free(el->wrapped_text);
+        el->wrapped_text = NULL;
+    }
+}
+
+const char *_text_for_rendering(const struct nui_element *el) {
+    return el->wrapped_text ? el->wrapped_text : el->text;
+}
+
 struct nui_element *_new_element(void) {
     if (ctx.pool.inactive_elements_first) {
         struct nui_element *el = ctx.pool.inactive_elements_first;
@@ -68,6 +84,10 @@ void _pool_init(void) {
 
 void _pool_reset(void) {
     if (ctx.pool.active_elements_last) {
+        for (struct nui_element *el = ctx.pool.active_elements_first; el != NULL; el = el->pool_next) {
+            _free_element_content(el);
+        }
+
         ctx.pool.active_elements_last->pool_next = ctx.pool.inactive_elements_first;
         ctx.pool.inactive_elements_first = ctx.pool.active_elements_first;
         ctx.pool.active_elements_first = NULL;
@@ -78,12 +98,14 @@ void _pool_reset(void) {
 void _pool_fini(void) {
     for (struct nui_element *el = ctx.pool.active_elements_first; el != NULL; ) {
         struct nui_element *next = el->pool_next;
+        _free_element_content(el);
         ctx.memory.free(el);
         el = next;
     }
 
     for (struct nui_element *el = ctx.pool.inactive_elements_first; el != NULL; ) {
         struct nui_element *next = el->pool_next;
+        _free_element_content(el);
         ctx.memory.free(el);
         el = next;
     }
@@ -205,6 +227,50 @@ void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
 
+bool _is_text_separator(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+void _measure_text_range(const struct nui_font *font, const char *text, size_t len, int *width, int *height) {
+    *width = 0;
+    *height = 0;
+
+    if (!font || !text || len == 0 || !ctx.backend->measure_text) {
+        return;
+    }
+
+    char *buffer = ctx.memory.malloc(len + 1);
+    memcpy(buffer, text, len);
+    buffer[len] = '\0';
+
+    ctx.backend->measure_text(font, buffer, width, height);
+    ctx.memory.free(buffer);
+}
+
+int _measure_text_minimum_width(const struct nui_font *font, const char *text) {
+    int minimum_width = 0;
+
+    for (const char *at = text; *at; ) {
+        while (*at && _is_text_separator(*at)) {
+            at++;
+        }
+
+        const char *start = at;
+        while (*at && !_is_text_separator(*at)) {
+            at++;
+        }
+
+        size_t len = (size_t)(at - start);
+        if (len > 0) {
+            int word_width, word_height;
+            _measure_text_range(font, start, len, &word_width, &word_height);
+            minimum_width = MAX(minimum_width, word_width);
+        }
+    }
+
+    return minimum_width;
+}
+
 void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_fit_sizing_element(child, xaxis);
@@ -212,8 +278,12 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
 
     if (xaxis) {
         el->w = el->fixed.width;
+        el->preferred.width = el->fixed.width;
+        el->minimum.width = el->fixed.width;
     } else {
         el->h = el->fixed.height;
+        el->preferred.height = el->fixed.height;
+        el->minimum.height = el->fixed.height;
     }
 
     bool fit = xaxis ? !el->fixed.width : !el->fixed.height;
@@ -222,15 +292,19 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
             if (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) {
                 if (xaxis) {
-                    el->w += child->w;
+                    el->preferred.width += child->preferred.width;
+                    el->minimum.width += child->minimum.width;
                 } else {
-                    el->h = MAX(el->h, child->h);
+                    el->preferred.height = MAX(el->preferred.height, child->preferred.height);
+                    el->minimum.height = MAX(el->minimum.height, child->minimum.height);
                 }
             } else if (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) {
                 if (xaxis) {
-                    el->w = MAX(el->w, child->w);
+                    el->preferred.width = MAX(el->preferred.width, child->preferred.width);
+                    el->minimum.width = MAX(el->minimum.width, child->minimum.width);
                 } else {
-                    el->h += child->h;
+                    el->preferred.height += child->preferred.height;
+                    el->minimum.height += child->minimum.height;
                 }
             }
         }
@@ -240,9 +314,11 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
             bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
             if (along) {
                 if (xaxis) {
-                    el->w += el->child_gap * (el->children_count - 1);
+                    el->preferred.width += el->child_gap * (el->children_count - 1);
+                    el->minimum.width += el->child_gap * (el->children_count - 1);
                 } else {
-                    el->h += el->child_gap * (el->children_count - 1);
+                    el->preferred.height += el->child_gap * (el->children_count - 1);
+                    el->minimum.height += el->child_gap * (el->children_count - 1);
                 }
             }
         }
@@ -250,29 +326,42 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
         // Text content.
         if (el->text && el->style.font && ctx.backend->measure_text) {
             int text_width, text_height;
-            ctx.backend->measure_text(el->style.font, el->text, &text_width, &text_height);
+            const char *text = xaxis ? el->text : _text_for_rendering(el);
+            ctx.backend->measure_text(el->style.font, text, &text_width, &text_height);
             if (xaxis) {
-                el->w = MAX(el->w, text_width);
+                el->preferred.width = MAX(el->preferred.width, text_width);
+                el->minimum.width = MAX(el->minimum.width, _measure_text_minimum_width(el->style.font, el->text));
             } else {
-                el->h = MAX(el->h, text_height);
+                el->preferred.height = MAX(el->preferred.height, text_height);
+                el->minimum.height = MAX(el->minimum.height, text_height);
             }
         }
 
         // Image content.
         if (el->image) {
             if (xaxis) {
-                el->w = MAX(el->w, el->image->width);
+                el->preferred.width = MAX(el->preferred.width, el->image->width);
+                el->minimum.width = MAX(el->minimum.width, el->image->width);
             } else {
-                el->h = MAX(el->h, el->image->height);
+                el->preferred.height = MAX(el->preferred.height, el->image->height);
+                el->minimum.height = MAX(el->minimum.height, el->image->height);
             }
         }
 
         // Padding.
         if (xaxis) {
-            el->w += el->padding.left + el->padding.right;
+            el->preferred.width += el->padding.left + el->padding.right;
+            el->minimum.width += el->padding.left + el->padding.right;
         } else {
-            el->h += el->padding.top + el->padding.bottom;
+            el->preferred.height += el->padding.top + el->padding.bottom;
+            el->minimum.height += el->padding.top + el->padding.bottom;
         }
+    }
+
+    if (xaxis) {
+        el->w = el->preferred.width;
+    } else {
+        el->h = el->preferred.height;
     }
 }
 
@@ -402,6 +491,100 @@ void _nui_distribute_remaining_space_among_growable_elements(struct nui_element 
     }
 }
 
+int _nui_axis_size(const struct nui_element *el, bool xaxis) {
+    return xaxis ? el->w : el->h;
+}
+
+int _nui_axis_minimum(const struct nui_element *el, bool xaxis) {
+    return xaxis ? el->minimum.width : el->minimum.height;
+}
+
+void _nui_set_axis_size(struct nui_element *el, bool xaxis, int size) {
+    if (xaxis) {
+        el->w = size;
+    } else {
+        el->h = size;
+    }
+}
+
+void _nui_shrink_axis_size(struct nui_element *el, bool xaxis, int amount) {
+    _nui_set_axis_size(el, xaxis, _nui_axis_size(el, xaxis) - amount);
+}
+
+int _nui_content_size(const struct nui_element *el, bool xaxis) {
+    int padding = xaxis ? (el->padding.left + el->padding.right) : (el->padding.top + el->padding.bottom);
+    return MAX(0, _nui_axis_size(el, xaxis) - padding);
+}
+
+void _nui_shrink_children_along_axis(struct nui_element *el, bool xaxis) {
+    int used = 0;
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        used += _nui_axis_size(child, xaxis);
+    }
+
+    if (el->children_count > 0) {
+        used += el->child_gap * (el->children_count - 1);
+    }
+
+    int overflow = used - _nui_content_size(el, xaxis);
+    while (overflow > 0) {
+        int shrinkable_count = 0;
+        for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            if (_nui_axis_size(child, xaxis) > _nui_axis_minimum(child, xaxis)) {
+                shrinkable_count++;
+            }
+        }
+
+        if (shrinkable_count == 0) {
+            break;
+        }
+
+        int share = MAX(1, (overflow + shrinkable_count - 1) / shrinkable_count);
+        bool shrunk = false;
+        for (struct nui_element *child = el->first_child; child != NULL && overflow > 0; child = child->next) {
+            int room = _nui_axis_size(child, xaxis) - _nui_axis_minimum(child, xaxis);
+            if (room <= 0) {
+                continue;
+            }
+
+            int take = MIN(room, MIN(share, overflow));
+            _nui_shrink_axis_size(child, xaxis, take);
+            overflow -= take;
+            shrunk = true;
+        }
+
+        if (!shrunk) {
+            break;
+        }
+    }
+}
+
+void _nui_shrink_children_across_axis(struct nui_element *el, bool xaxis) {
+    int available = _nui_content_size(el, xaxis);
+
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        int child_size = _nui_axis_size(child, xaxis);
+        int child_minimum = _nui_axis_minimum(child, xaxis);
+        if (child_size > available) {
+            _nui_set_axis_size(child, xaxis, MAX(child_minimum, available));
+        }
+    }
+}
+
+void _nui_shrink_sizing_element(struct nui_element *el, bool xaxis) {
+    bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
+
+    if (along) {
+        _nui_shrink_children_along_axis(el, xaxis);
+    } else {
+        _nui_shrink_children_across_axis(el, xaxis);
+    }
+
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        _nui_shrink_sizing_element(child, xaxis);
+    }
+}
+
 void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
     bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
     bool across = xaxis ? (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM) : (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT);
@@ -415,7 +598,7 @@ void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
     if (along) {
         // Children sizes.
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
-            remaining -= child->w;
+            remaining -= _nui_axis_size(child, xaxis);
         }
 
         // Gaps between children.
@@ -446,6 +629,82 @@ void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
     // Recursively.
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
         _nui_grow_sizing_element(child, xaxis);
+    }
+}
+
+char *_nui_wrap_text_to_width(const struct nui_font *font, const char *text, int max_width) {
+    size_t len = strlen(text);
+    char *wrapped = ctx.memory.malloc(len + 1);
+    size_t wrapped_len = 0;
+    size_t line_start = 0;
+    bool line_has_word = false;
+
+    for (const char *at = text; *at; ) {
+        if (*at == '\n') {
+            wrapped[wrapped_len++] = '\n';
+            at++;
+            line_start = wrapped_len;
+            line_has_word = false;
+            continue;
+        }
+
+        if (*at == ' ' || *at == '\t' || *at == '\r') {
+            at++;
+            continue;
+        }
+
+        const char *start = at;
+        while (*at && !_is_text_separator(*at)) {
+            at++;
+        }
+
+        size_t word_len = (size_t)(at - start);
+
+        if (line_has_word) {
+            size_t before_word = wrapped_len;
+            wrapped[wrapped_len++] = ' ';
+            memcpy(wrapped + wrapped_len, start, word_len);
+            wrapped_len += word_len;
+
+            int candidate_width, candidate_height;
+            _measure_text_range(font, wrapped + line_start, wrapped_len - line_start, &candidate_width, &candidate_height);
+            if (max_width > 0 && candidate_width > max_width) {
+                wrapped_len = before_word;
+                wrapped[wrapped_len++] = '\n';
+                line_start = wrapped_len;
+                memcpy(wrapped + wrapped_len, start, word_len);
+                wrapped_len += word_len;
+            }
+        } else {
+            memcpy(wrapped + wrapped_len, start, word_len);
+            wrapped_len += word_len;
+        }
+
+        line_has_word = true;
+    }
+
+    wrapped[wrapped_len] = '\0';
+    return wrapped;
+}
+
+void _nui_wrap_text_element(struct nui_element *el) {
+    if (el->wrapped_text) {
+        ctx.memory.free(el->wrapped_text);
+        el->wrapped_text = NULL;
+    }
+
+    if (el->text && el->style.font && ctx.backend->measure_text) {
+        int text_width, text_height;
+        ctx.backend->measure_text(el->style.font, el->text, &text_width, &text_height);
+
+        int content_width = MAX(0, el->w - el->padding.left - el->padding.right);
+        if (content_width > 0 && text_width > content_width) {
+            el->wrapped_text = _nui_wrap_text_to_width(el->style.font, el->text, content_width);
+        }
+    }
+
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        _nui_wrap_text_element(child);
     }
 }
 
@@ -502,16 +761,16 @@ void nui_update(void) {
     _nui_fit_sizing_element(&ctx.root, true);
     // 3 - Grow and shrink sizing widths pass.
     _nui_grow_sizing_element(&ctx.root, true);
-    // _nui_shrink_sizing_element();
+    _nui_shrink_sizing_element(&ctx.root, true);
 
     // 4 - Wrap text pass.
-    // _nui_wrap_text_pass();
+    _nui_wrap_text_element(&ctx.root);
 
     // 5 - Fit sizing heights pass.
     _nui_fit_sizing_element(&ctx.root, false);
     // 6 - Grow and shrink sizing heights pass.
-    // _nui_shrink_sizing_element(&ctx.root, false);
     _nui_grow_sizing_element(&ctx.root, false);
+    _nui_shrink_sizing_element(&ctx.root, false);
 
     // 7 - Positioning pass.
     _nui_positioning_element(&ctx.root, 0, 0);
@@ -538,7 +797,7 @@ void _nui_render_element(struct nui_element *el) {
     }
 
     if (el->text) {
-        ctx.backend->draw_text(el->style.font, el->x + el->padding.left, el->y + el->padding.top, el->text, el->style.font_color);
+        ctx.backend->draw_text(el->style.font, el->x + el->padding.left, el->y + el->padding.top, _text_for_rendering(el), el->style.font_color);
     }
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
@@ -576,7 +835,14 @@ void nui_font(const struct nui_font *font) {
 
 void nui_image(const struct nui_image *image) {
     ctx.current->image = image;
-    ctx.current->text = NULL;
+    if (ctx.current->text) {
+        ctx.memory.free(ctx.current->text);
+        ctx.current->text = NULL;
+    }
+    if (ctx.current->wrapped_text) {
+        ctx.memory.free(ctx.current->wrapped_text);
+        ctx.current->wrapped_text = NULL;
+    }
 }
 
 void nui_text(const char *fmt, ...) {
@@ -591,6 +857,14 @@ void nui_text(const char *fmt, ...) {
     va_start(args, fmt);
     vsnprintf(buffer, n + 1, fmt, args);
     va_end(args);
+
+    if (ctx.current->text) {
+        ctx.memory.free(ctx.current->text);
+    }
+    if (ctx.current->wrapped_text) {
+        ctx.memory.free(ctx.current->wrapped_text);
+        ctx.current->wrapped_text = NULL;
+    }
 
     ctx.current->text = buffer;
     ctx.current->image = NULL;
