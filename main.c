@@ -101,7 +101,7 @@ int main(void) {
     nui_viewport(fb_width, fb_height);
 
     struct nui_image *logo = nui_load_image_from_file("assets/nui.png");
-    struct nui_font *font = nui_load_font_from_file("assets/DejaVuSans.ttf", 64.0f);
+    struct nui_font *font = nui_load_font_from_file("assets/DejaVuSans.ttf", 32.0f);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -139,7 +139,7 @@ int main(void) {
                     NUI {
                         nui_background_color(0x000000ff);
                         nui_font_color(YELLOW);
-                        nui_text("A quick brown fox jumped over the lazy dog.");
+                        nui_text("AV quick brown fox jumped over the lazy dog.");
                     }
                 }
 

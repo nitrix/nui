@@ -16,7 +16,7 @@ int sanity_text_fit(int argc, char **argv) {
             nui_background_color(PINK);
             nui_padding(16, 16, 16, 16);
             nui_font_color(YELLOW);
-            nui_text("Fit");
+            nui_text("AV");
         }
     }
 

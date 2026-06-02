@@ -28,10 +28,14 @@ static struct {
 
 struct ngl_font {
     GLuint texture;
+    unsigned char *font_buffer;
+    stbtt_fontinfo info;
     stbtt_bakedchar *baked;
+    int first_char;
     size_t num_chars;
     size_t pixels_width;
     size_t pixels_height;
+    float scale;
     float ascent;
     float line_height;
 };
@@ -266,7 +270,7 @@ struct nui_font *ngl_load_font_from_file(const char *filename, float font_size) 
 
     size_t pixels_width = 512;
     size_t pixels_height = 512;
-    char first_char = 32;
+    int first_char = 32;
     size_t num_chars = 255 - first_char;
     unsigned char *pixels = malloc(pixels_width*pixels_height);
     if (!pixels) {
@@ -285,14 +289,17 @@ struct nui_font *ngl_load_font_from_file(const char *filename, float font_size) 
     stbtt_BakeFontBitmap(font_buffer, 0, font_size, pixels, pixels_width, pixels_height, first_char, num_chars, baked);
 
     stbtt_fontinfo info;
-    stbtt_InitFont(&info, font_buffer, 0);
+    if (!stbtt_InitFont(&info, font_buffer, 0)) {
+        free(font_buffer);
+        free(pixels);
+        free(baked);
+        return NULL;
+    }
 
     int ascent_int, descent_int, line_gap;
     stbtt_GetFontVMetrics(&info, &ascent_int, &descent_int, &line_gap);
 
     float scale = stbtt_ScaleForPixelHeight(&info, font_size);
-
-    free(font_buffer);
 
     GLuint font_texture;
     glGenTextures(1, &font_texture);
@@ -308,20 +315,28 @@ struct nui_font *ngl_load_font_from_file(const char *filename, float font_size) 
     struct ngl_font *ngl_font = malloc(sizeof *ngl_font);
     if (!ngl_font) {
         glDeleteTextures(1, &font_texture);
+        free(font_buffer);
+        free(baked);
         return NULL;
     }
 
     ngl_font->texture = font_texture;
+    ngl_font->font_buffer = font_buffer;
+    ngl_font->info = info;
     ngl_font->baked = baked;
+    ngl_font->first_char = first_char;
     ngl_font->num_chars = num_chars;
     ngl_font->pixels_width = pixels_width;
     ngl_font->pixels_height = pixels_height;
+    ngl_font->scale = scale;
     ngl_font->ascent = ascent_int * scale;
     ngl_font->line_height = (ascent_int - descent_int + line_gap) * scale;
 
     struct nui_font *font = malloc(sizeof *font);
     if (!font) {
         glDeleteTextures(1, &font_texture);
+        free(font_buffer);
+        free(baked);
         free(ngl_font);
         return NULL;
     }
@@ -334,8 +349,22 @@ struct nui_font *ngl_load_font_from_file(const char *filename, float font_size) 
 void ngl_unload_font(struct nui_font *font) {
     struct ngl_font *ngl_font = font->handle;
     glDeleteTextures(1, &ngl_font->texture);
+    free(ngl_font->font_buffer);
+    free(ngl_font->baked);
     free(ngl_font);
     free(font);
+}
+
+static bool _ngl_font_has_codepoint(const struct ngl_font *font, unsigned char ch) {
+    return ch >= font->first_char && (size_t)(ch - font->first_char) < font->num_chars;
+}
+
+static float _ngl_font_kerning(const struct ngl_font *font, unsigned char ch, unsigned char next) {
+    if (!_ngl_font_has_codepoint(font, next)) {
+        return 0;
+    }
+
+    return font->scale * stbtt_GetCodepointKernAdvance(&font->info, ch, next);
 }
 
 void ngl_before_render(int width, int height) {
@@ -406,12 +435,15 @@ static bool _ngl_measure_text_line_bounds(const struct ngl_font *font, const cha
         stbtt_aligned_quad q;
         unsigned char ch = (unsigned char)text[i];
 
-        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+        if (!_ngl_font_has_codepoint(font, ch)) {
             continue;
         }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - font->first_char, &fx, &fy, &q, opengl);
+        if (i + 1 < len) {
+            fx += _ngl_font_kerning(font, ch, (unsigned char)text[i + 1]);
+        }
 
         if (!has_bounds) {
             bounds->min_x = (int) q.x0;
@@ -502,12 +534,15 @@ static void _ngl_draw_text_line(const struct ngl_font *font, int x, int y, const
         stbtt_aligned_quad q;
         unsigned char ch = (unsigned char)text[i];
 
-        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+        if (!_ngl_font_has_codepoint(font, ch)) {
             continue;
         }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - font->first_char, &fx, &fy, &q, opengl);
+        if (i + 1 < len) {
+            fx += _ngl_font_kerning(font, ch, (unsigned char)text[i + 1]);
+        }
 
         glUniform2f(uniforms.uv_offset, q.s0, q.t0);
         glUniform2f(uniforms.uv_scale, q.s1 - q.s0, q.t1 - q.t0);

@@ -11,11 +11,15 @@
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 struct sw_font {
+    unsigned char *font_buffer;
+    stbtt_fontinfo info;
     unsigned char *pixels;
     stbtt_bakedchar *baked;
+    int first_char;
     size_t num_chars;
     size_t pixels_width;
     size_t pixels_height;
+    float scale;
     float ascent;
     float line_height;
 };
@@ -87,25 +91,37 @@ void sw_unload_image(struct nui_image *image) {
     free(image);
 }
 
-// Emulates glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+// Emulates glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) without
+// platform-dependent float rounding in generated test images.
 uint32_t _blend_color(uint32_t src, uint32_t dst) {
-    float src_a = (src & 0xFF) / 255.0f;
-    float dst_a = (dst & 0xFF) / 255.0f;
+    uint32_t src_r = (src >> 24) & 0xFF;
+    uint32_t src_g = (src >> 16) & 0xFF;
+    uint32_t src_b = (src >> 8) & 0xFF;
+    uint32_t src_a = src & 0xFF;
 
-    float out_a = src_a + dst_a * (1 - src_a);
-    if (out_a == 0) {
+    uint32_t dst_r = (dst >> 24) & 0xFF;
+    uint32_t dst_g = (dst >> 16) & 0xFF;
+    uint32_t dst_b = (dst >> 8) & 0xFF;
+    uint32_t dst_a = dst & 0xFF;
+
+    uint32_t src_weight = src_a * 255;
+    uint32_t dst_weight = dst_a * (255 - src_a);
+    uint32_t out_a = (src_weight + dst_weight) / 255;
+    uint32_t out_weight = src_weight + dst_weight;
+
+    if (out_weight == 0) {
         return 0;
     }
 
-    float out_r = (((src >> 24) & 0xFF) * src_a + ((dst >> 24) & 0xFF) * dst_a * (1 - src_a)) / out_a;
-    float out_g = (((src >> 16) & 0xFF) * src_a + ((dst >> 16) & 0xFF) * dst_a * (1 - src_a)) / out_a;
-    float out_b = (((src >> 8) & 0xFF) * src_a + ((dst >> 8) & 0xFF) * dst_a * (1 - src_a)) / out_a;
+    uint32_t out_r = (src_r * src_weight + dst_r * dst_weight) / out_weight;
+    uint32_t out_g = (src_g * src_weight + dst_g * dst_weight) / out_weight;
+    uint32_t out_b = (src_b * src_weight + dst_b * dst_weight) / out_weight;
 
     uint32_t out_color =
-        (((uint32_t)(out_r) & 0xFF) << 24) |
-        (((uint32_t)(out_g) & 0xFF) << 16) |
-        (((uint32_t)(out_b) & 0xFF) << 8) |
-        (((uint32_t)(out_a * 255.0f) & 0xFF));
+        ((out_r & 0xFF) << 24) |
+        ((out_g & 0xFF) << 16) |
+        ((out_b & 0xFF) << 8) |
+        (out_a & 0xFF);
 
     return out_color;
 }
@@ -200,7 +216,7 @@ struct nui_font *sw_load_font_from_file(const char *filename, float font_size) {
 
     size_t pixels_width = 512;
     size_t pixels_height = 512;
-    char first_char = 32;
+    int first_char = 32;
     size_t num_chars = 255 - first_char;
     unsigned char *pixels = malloc(pixels_width*pixels_height);
     if (!pixels) {
@@ -219,32 +235,41 @@ struct nui_font *sw_load_font_from_file(const char *filename, float font_size) {
     stbtt_BakeFontBitmap(font_buffer, 0, font_size, pixels, pixels_width, pixels_height, first_char, num_chars, baked);
 
     stbtt_fontinfo info;
-    stbtt_InitFont(&info, font_buffer, 0);
+    if (!stbtt_InitFont(&info, font_buffer, 0)) {
+        free(font_buffer);
+        free(pixels);
+        free(baked);
+        return NULL;
+    }
 
     int ascent_int, descent_int, line_gap;
     stbtt_GetFontVMetrics(&info, &ascent_int, &descent_int, &line_gap);
 
     float scale = stbtt_ScaleForPixelHeight(&info, font_size);
 
-    free(font_buffer);
-
     struct sw_font *sw_font = malloc(sizeof *sw_font);
     if (!sw_font) {
+        free(font_buffer);
         free(pixels);
         free(baked);
         return NULL;
     }
 
+    sw_font->font_buffer = font_buffer;
+    sw_font->info = info;
     sw_font->pixels = pixels;
     sw_font->baked = baked;
+    sw_font->first_char = first_char;
     sw_font->num_chars = num_chars;
     sw_font->pixels_width = pixels_width;
     sw_font->pixels_height = pixels_height;
+    sw_font->scale = scale;
     sw_font->ascent = ascent_int * scale;
     sw_font->line_height = (ascent_int - descent_int + line_gap) * scale;
 
     struct nui_font *font = malloc(sizeof *font);
     if (!font) {
+        free(font_buffer);
         free(pixels);
         free(baked);
         free(sw_font);
@@ -258,10 +283,23 @@ struct nui_font *sw_load_font_from_file(const char *filename, float font_size) {
 
 void sw_unload_font(struct nui_font *font) {
     struct sw_font *sw_font = font->handle;
+    free(sw_font->font_buffer);
     free(sw_font->pixels);
     free(sw_font->baked);
     free(sw_font);
     free(font);
+}
+
+static bool _sw_font_has_codepoint(const struct sw_font *font, unsigned char ch) {
+    return ch >= font->first_char && (size_t)(ch - font->first_char) < font->num_chars;
+}
+
+static float _sw_font_kerning(const struct sw_font *font, unsigned char ch, unsigned char next) {
+    if (!_sw_font_has_codepoint(font, next)) {
+        return 0;
+    }
+
+    return font->scale * stbtt_GetCodepointKernAdvance(&font->info, ch, next);
 }
 
 static bool _sw_measure_text_line_bounds(const struct sw_font *font, const char *text, size_t len, struct sw_text_bounds *bounds) {
@@ -273,12 +311,15 @@ static bool _sw_measure_text_line_bounds(const struct sw_font *font, const char 
         stbtt_aligned_quad q;
         unsigned char ch = (unsigned char)text[i];
 
-        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+        if (!_sw_font_has_codepoint(font, ch)) {
             continue;
         }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - font->first_char, &fx, &fy, &q, opengl);
+        if (i + 1 < len) {
+            fx += _sw_font_kerning(font, ch, (unsigned char)text[i + 1]);
+        }
 
         if (!has_bounds) {
             bounds->min_x = (int) q.x0;
@@ -369,12 +410,15 @@ static void _sw_draw_text_line(const struct sw_font *font, int x, int y, const c
         stbtt_aligned_quad q;
         unsigned char ch = (unsigned char)text[i];
 
-        if (ch < 32 || (size_t)(ch - 32) >= font->num_chars) {
+        if (!_sw_font_has_codepoint(font, ch)) {
             continue;
         }
 
         bool opengl = true;
-        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - 32, &fx, &fy, &q, opengl);
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, ch - font->first_char, &fx, &fy, &q, opengl);
+        if (i + 1 < len) {
+            fx += _sw_font_kerning(font, ch, (unsigned char)text[i + 1]);
+        }
 
         for (int iy = (int)q.y0; iy < (int)q.y1; iy++) {
             for (int ix = (int)q.x0; ix < (int)q.x1; ix++) {
