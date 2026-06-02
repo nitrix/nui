@@ -7,6 +7,7 @@
 #include "stb_truetype.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -83,6 +84,40 @@ struct nui_image *sw_load_image_from_file(const char *filename) {
     image->handle = pixels;
 
     return image;
+}
+
+struct nui_image *sw_create_image_rgba(int width, int height, const unsigned char *pixels) {
+    if (width <= 0 || height <= 0 || !pixels) {
+        return NULL;
+    }
+
+    struct nui_image *image = malloc(sizeof *image);
+    if (!image) {
+        return NULL;
+    }
+
+    size_t bytes = (size_t)width * (size_t)height * 4;
+    unsigned char *copy = malloc(bytes);
+    if (!copy) {
+        free(image);
+        return NULL;
+    }
+
+    memcpy(copy, pixels, bytes);
+    image->width = width;
+    image->height = height;
+    image->handle = copy;
+    return image;
+}
+
+bool sw_update_image_rgba(struct nui_image *image, const unsigned char *pixels) {
+    if (!image || !pixels) {
+        return false;
+    }
+
+    size_t bytes = (size_t)image->width * (size_t)image->height * 4;
+    memcpy(image->handle, pixels, bytes);
+    return true;
 }
 
 void sw_unload_image(struct nui_image *image) {

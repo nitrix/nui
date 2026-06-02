@@ -15,6 +15,8 @@ void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, u
 void sw_measure_text(const struct nui_font *font, const char *text, int *width, int *height);
 void sw_export(const char *filename);
 struct nui_image *sw_load_image_from_file(const char *filename);
+struct nui_image *sw_create_image_rgba(int width, int height, const unsigned char *pixels);
+bool sw_update_image_rgba(struct nui_image *image, const unsigned char *pixels);
 void sw_unload_image(struct nui_image *image);
 struct nui_font *sw_load_font_from_file(const char *filename, float font_size);
 void sw_unload_font(struct nui_font *font);
@@ -23,6 +25,8 @@ static struct nui_backend _sw = {
     .init = sw_init,
     .fini = sw_fini,
     .load_image_from_file = sw_load_image_from_file,
+    .create_image_rgba = sw_create_image_rgba,
+    .update_image_rgba = sw_update_image_rgba,
     .unload_image = sw_unload_image,
     .before_render = sw_before_render,
     .after_render = sw_after_render,

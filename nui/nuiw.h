@@ -57,12 +57,16 @@ void nuiw_popover_begin(void);
 void nuiw_popover_end(void);
 void nuiw_dialog_begin(void);
 void nuiw_dialog_end(void);
+bool nuiw_modal_begin(const char *title, bool *open);
+void nuiw_modal_end(void);
 
 bool nuiw_button(const char *label);
+bool nuiw_image_button(const char *label, const struct nui_image *image);
 bool nuiw_checkbox(const char *label, bool *value);
 bool nuiw_radio(const char *label, bool selected);
 bool nuiw_slider_float(const char *label, float *value, float min, float max);
 bool nuiw_input_text(const char *label, char *buffer, size_t capacity);
+bool nuiw_resize_handle(const char *label, int *width, int *height, int min_width, int min_height, int max_width, int max_height);
 bool nuiw_combo_begin(const char *label, const char *preview);
 bool nuiw_combo_item(const char *label, bool selected);
 void nuiw_combo_end(void);

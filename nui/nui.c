@@ -320,6 +320,12 @@ void nui_align(enum nui_align align) {
     ctx.current->align = align;
 }
 
+void nui_overlay(void) {
+    ctx.current->flags |= NUI_ELEMENT_FLAG_OVERLAY;
+    ctx.current->fixed.width = ctx.root.fixed.width;
+    ctx.current->fixed.height = ctx.root.fixed.height;
+}
+
 void nui_child_gap(int gap) {
     ctx.current->child_gap = gap;
 }
@@ -380,6 +386,20 @@ int _nui_margin_total(const struct nui_element *el, bool xaxis) {
     return _nui_margin_before(el, xaxis) + _nui_margin_after(el, xaxis);
 }
 
+bool _nui_is_overlay(const struct nui_element *el) {
+    return (el->flags & NUI_ELEMENT_FLAG_OVERLAY) != 0;
+}
+
+size_t _nui_in_flow_children_count(const struct nui_element *el) {
+    size_t count = 0;
+    for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        if (!_nui_is_overlay(child)) {
+            count++;
+        }
+    }
+    return count;
+}
+
 int _nui_outer_preferred(const struct nui_element *el, bool xaxis) {
     return (xaxis ? el->preferred.width : el->preferred.height) + _nui_margin_total(el, xaxis);
 }
@@ -407,6 +427,9 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
     if (fit) {
         // Children sizes.
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            if (_nui_is_overlay(child)) {
+                continue;
+            }
             if (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) {
                 if (xaxis) {
                     el->preferred.width += _nui_outer_preferred(child, true);
@@ -427,15 +450,16 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
         }
 
         // Gaps.
-        if (el->children_count > 0) {
+        size_t children_count = _nui_in_flow_children_count(el);
+        if (children_count > 0) {
             bool along = xaxis ? (el->layout == NUI_LAYOUT_LEFT_TO_RIGHT) : (el->layout == NUI_LAYOUT_TOP_TO_BOTTOM);
             if (along) {
                 if (xaxis) {
-                    el->preferred.width += el->child_gap * (el->children_count - 1);
-                    el->minimum.width += el->child_gap * (el->children_count - 1);
+                    el->preferred.width += el->child_gap * (children_count - 1);
+                    el->minimum.width += el->child_gap * (children_count - 1);
                 } else {
-                    el->preferred.height += el->child_gap * (el->children_count - 1);
-                    el->minimum.height += el->child_gap * (el->children_count - 1);
+                    el->preferred.height += el->child_gap * (children_count - 1);
+                    el->minimum.height += el->child_gap * (children_count - 1);
                 }
             }
         }
@@ -487,6 +511,9 @@ void _nui_find_smallest_growable_along_children(struct nui_element *el, struct n
     *second_smallest = NULL;
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        if (_nui_is_overlay(child)) {
+            continue;
+        }
         bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
         bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
 
@@ -636,17 +663,24 @@ int _nui_content_size(const struct nui_element *el, bool xaxis) {
 void _nui_shrink_children_along_axis(struct nui_element *el, bool xaxis) {
     int used = 0;
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        if (_nui_is_overlay(child)) {
+            continue;
+        }
         used += _nui_axis_size(child, xaxis) + _nui_margin_total(child, xaxis);
     }
 
-    if (el->children_count > 0) {
-        used += el->child_gap * (el->children_count - 1);
+    size_t children_count = _nui_in_flow_children_count(el);
+    if (children_count > 0) {
+        used += el->child_gap * (children_count - 1);
     }
 
     int overflow = used - _nui_content_size(el, xaxis);
     while (overflow > 0) {
         int shrinkable_count = 0;
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            if (_nui_is_overlay(child)) {
+                continue;
+            }
             if (_nui_axis_size(child, xaxis) > _nui_axis_minimum(child, xaxis)) {
                 shrinkable_count++;
             }
@@ -659,6 +693,9 @@ void _nui_shrink_children_along_axis(struct nui_element *el, bool xaxis) {
         int share = MAX(1, (overflow + shrinkable_count - 1) / shrinkable_count);
         bool shrunk = false;
         for (struct nui_element *child = el->first_child; child != NULL && overflow > 0; child = child->next) {
+            if (_nui_is_overlay(child)) {
+                continue;
+            }
             int room = _nui_axis_size(child, xaxis) - _nui_axis_minimum(child, xaxis);
             if (room <= 0) {
                 continue;
@@ -680,6 +717,9 @@ void _nui_shrink_children_across_axis(struct nui_element *el, bool xaxis) {
     int available = _nui_content_size(el, xaxis);
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        if (_nui_is_overlay(child)) {
+            continue;
+        }
         int child_size = _nui_axis_size(child, xaxis) + _nui_margin_total(child, xaxis);
         int child_minimum = _nui_axis_minimum(child, xaxis);
         if (child_size > available) {
@@ -715,12 +755,16 @@ void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
     if (along) {
         // Children sizes.
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            if (_nui_is_overlay(child)) {
+                continue;
+            }
             remaining -= _nui_axis_size(child, xaxis) + _nui_margin_total(child, xaxis);
         }
 
         // Gaps between children.
-        if (el->children_count > 0) {
-            remaining -= el->child_gap * (el->children_count - 1);
+        size_t children_count = _nui_in_flow_children_count(el);
+        if (children_count > 0) {
+            remaining -= el->child_gap * (children_count - 1);
         }
 
         // Distribute remaining space along the width.
@@ -730,6 +774,9 @@ void _nui_grow_sizing_element(struct nui_element *el, bool xaxis) {
     // Across the axis.
     if (across) {
         for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+            if (_nui_is_overlay(child)) {
+                continue;
+            }
             bool grow_width = (child->flags & NUI_ELEMENT_FLAG_GROW_WIDTH) != 0;
             bool grow_height = (child->flags & NUI_ELEMENT_FLAG_GROW_HEIGHT) != 0;
             bool grow = xaxis ? grow_width : grow_height;
@@ -844,6 +891,11 @@ void _nui_positioning_element(struct nui_element *el, int marker_x, int marker_y
     marker_y += el->padding.top;
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
+        if (_nui_is_overlay(child)) {
+            _nui_positioning_element(child, 0, 0);
+            continue;
+        }
+
         int child_x = marker_x + child->margin.left;
         int child_y = marker_y + child->margin.top;
 
@@ -963,6 +1015,20 @@ void nui_render(void) {
 
 struct nui_image *nui_load_image_from_file(const char *filename) {
     return ctx.backend->load_image_from_file(filename);
+}
+
+struct nui_image *nui_create_image_rgba(int width, int height, const unsigned char *pixels) {
+    if (!ctx.backend->create_image_rgba) {
+        return NULL;
+    }
+    return ctx.backend->create_image_rgba(width, height, pixels);
+}
+
+bool nui_update_image_rgba(struct nui_image *image, const unsigned char *pixels) {
+    if (!ctx.backend->update_image_rgba) {
+        return false;
+    }
+    return ctx.backend->update_image_rgba(image, pixels);
 }
 
 void nui_unload_image(struct nui_image *image) {

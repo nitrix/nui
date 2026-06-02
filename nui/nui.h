@@ -70,6 +70,7 @@ enum nui_element_flags : uint32_t {
     NUI_ELEMENT_FLAG_GROW_HEIGHT = (1 << 3),
     NUI_ELEMENT_FLAG_HAS_BORDER = (1 << 4),
     NUI_ELEMENT_FLAG_HAS_CORNER_RADIUS = (1 << 5),
+    NUI_ELEMENT_FLAG_OVERLAY = (1 << 6),
 };
 
 struct nui_image {
@@ -134,6 +135,8 @@ struct nui_backend {
     void (*draw_text)(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
     void (*measure_text)(const struct nui_font *font, const char *text, int *width, int *height);
     struct nui_image *(*load_image_from_file)(const char *filename);
+    struct nui_image *(*create_image_rgba)(int width, int height, const unsigned char *pixels);
+    bool (*update_image_rgba)(struct nui_image *image, const unsigned char *pixels);
     void (*unload_image)(struct nui_image *image);
     struct nui_font *(*load_font_from_file)(const char *filename, float font_size);
     void (*unload_font)(struct nui_font *font);
@@ -171,6 +174,9 @@ const struct nui_element *nui_current_element(void);
 void nui_layout(enum nui_layout layout);
 // Align children along the axis perpendicular to the element layout.
 void nui_align(enum nui_align align);
+// Overlay elements fill the viewport, render in declaration order, and do not
+// consume normal layout space.
+void nui_overlay(void);
 
 // Sizing.
 // By default, an element will automatically adapt itself to neatly "fit" all of its children.
@@ -210,6 +216,8 @@ void nui_font_color(uint32_t color);
 
 // Image loading.
 struct nui_image *nui_load_image_from_file(const char *filename);
+struct nui_image *nui_create_image_rgba(int width, int height, const unsigned char *pixels);
+bool nui_update_image_rgba(struct nui_image *image, const unsigned char *pixels);
 void nui_unload_image(struct nui_image *image);
 
 // Fonts.

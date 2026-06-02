@@ -71,6 +71,56 @@ static void _feed_input(GLFWwindow *window) {
     _feed_key(window, GLFW_KEY_TAB, NUI_KEY_TAB);
 }
 
+static void _demo_heading(struct nui_font *font, const char *text) {
+    NUI {
+        nui_font(font);
+        nui_font_color(nuiw_theme_high_contrast()->accent);
+        nui_text("%s", text);
+    }
+}
+
+static void _demo_note(struct nui_font *font, const char *text) {
+    NUI {
+        nui_font(font);
+        nui_font_color(0xb8c0ccff);
+        nui_text("%s", text);
+    }
+}
+
+static void _demo_code(struct nui_font *font, const char *text) {
+    NUI {
+        nui_grow_width();
+        nui_padding(8, 10, 8, 10);
+        nui_background_color(0x090c10ff);
+        nui_border(0xffffff17, 1);
+        nui_corner_radius(4);
+        nui_font(font);
+        nui_font_color(0xd7dde8ff);
+        nui_text("%s", text);
+    }
+}
+
+static void _demo_alignment_box(struct nui_font *font, const char *label, enum nui_layout layout, enum nui_align align) {
+    NUI {
+        nui_fixed(180, 82);
+        nui_layout(layout);
+        nui_align(align);
+        nui_padding(8, 8, 8, 8);
+        nui_background_color(0x0d1014ff);
+        nui_border(0x5ca4ff66, 1);
+        nui_corner_radius(4);
+        NUI {
+            nui_fixed(72, 24);
+            nui_background_color(0xff8a224d);
+            nui_border(0xff8a22ff, 1);
+            nui_corner_radius(4);
+            nui_font(font);
+            nui_font_color(0xf2f4f8ff);
+            nui_text("%s", label);
+        }
+    }
+}
+
 int main(void) {
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
@@ -109,18 +159,22 @@ int main(void) {
     struct nui_font *font_small = nui_load_font_from_file("assets/DejaVuSans.ttf", 11.0f);
     struct nui_font *font_large = nui_load_font_from_file("assets/DejaVuSans.ttf", 22.0f);
     struct nui_font *font_title = nui_load_font_from_file("assets/DejaVuSans.ttf", 30.0f);
-    char name[64] = "Cube.001";
+    struct nui_image *logo = nui_load_image_from_file("assets/nui.png");
+    char name[128] = "Editable text keeps this field stable";
     bool visible = true;
     bool selectable = true;
     bool tree_open = true;
-    bool show_bounds = false;
+    bool button_toggle = false;
+    bool popover_open = false;
+    bool modal_open = false;
     int demo_page = 0;
     int radio_mode = 0;
-    float scale = 0.62f;
-    float alpha = 0.78f;
-    float roughness = 0.42f;
+    int click_count = 0;
+    int image_width = 280;
+    int image_height = 160;
+    float alpha = 0.85f;
     float rgba[4] = {1.0f, 0.54f, 0.13f, 1.0f};
-    const char *pivot = "Median Point";
+    const char *pivot = "Stretch";
 
     while (!glfwWindowShouldClose(window)) {
         nui_frame();
@@ -145,7 +199,7 @@ int main(void) {
                 if (nuiw_tab("Buttons", demo_page == 0)) demo_page = 0;
                 if (nuiw_tab("Text", demo_page == 1)) demo_page = 1;
                 if (nuiw_tab("Inputs", demo_page == 2)) demo_page = 2;
-                if (nuiw_tab("Sliders", demo_page == 3)) demo_page = 3;
+                if (nuiw_tab("Images", demo_page == 3)) demo_page = 3;
                 if (nuiw_tab("Selection", demo_page == 4)) demo_page = 4;
                 if (nuiw_tab("Popups", demo_page == 5)) demo_page = 5;
                 if (nuiw_tab("Color", demo_page == 6)) demo_page = 6;
@@ -154,120 +208,156 @@ int main(void) {
             nuiw_panel_begin();
                 nui_grow();
                 if (demo_page == 0) {
+                    _demo_heading(font_title, "Buttons");
+                    _demo_note(font_small, "Start with plain click actions, then compose buttons with images and state.");
+                    _demo_code(font_small, "if (nuiw_button(\"Increment\")) clicks++;\nif (nuiw_image_button(\"Icon button\", logo)) { ... }");
+                    nuiw_row_begin();
+                        if (nuiw_button("Primary")) alpha = 1.0f;
+                        if (nuiw_button("Quiet")) alpha = 0.65f;
+                        if (nuiw_button("Increment")) click_count++;
+                    nuiw_row_end();
+                    nuiw_row_begin();
+                        if (nuiw_image_button("Image button", logo)) click_count++;
+                        if (nuiw_button(button_toggle ? "Toggle on" : "Toggle off")) button_toggle = !button_toggle;
+                    nuiw_row_end();
+                    _demo_note(font, "Clicks: use the return value in the same frame. Current count: ");
                     NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Buttons");
+                        nui_font(font_large);
+                        nui_font_color(0x5ca4ffff);
+                        nui_text("%d", click_count);
                     }
-                    nuiw_row_begin();
-                        if (nuiw_button("Button")) alpha = 0.5f;
-                        if (nuiw_button("Small")) alpha = 0.75f;
-                        if (nuiw_button("Apply")) alpha = 1.0f;
-                    nuiw_row_end();
-                    nuiw_row_begin();
-                        if (nuiw_tab("Object", radio_mode == 0)) radio_mode = 0;
-                        if (nuiw_tab("Edit", radio_mode == 1)) radio_mode = 1;
-                        if (nuiw_tab("Sculpt", radio_mode == 2)) radio_mode = 2;
-                    nuiw_row_end();
-                    nuiw_checkbox("Show bounds", &show_bounds);
                 } else if (demo_page == 1) {
-                    NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Text");
-                    }
-                    NUI {
-                        nui_font(font_title);
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Large accent heading");
-                    }
+                    _demo_heading(font_title, "Text and alignment");
+                    _demo_note(font_small, "Text is just element content. Container layout controls where child elements land.");
+                    _demo_code(font_small, "nui_layout(NUI_LAYOUT_LEFT_TO_RIGHT);\nnui_align(NUI_ALIGN_CENTER); // cross-axis alignment");
                     NUI {
                         nui_font(font_large);
                         nui_font_color(0xf2f4f8ff);
-                        nui_text("DejaVu Sans at 22 px");
-                    }
-                    NUI {
-                        nui_font(font_small);
-                        nui_font_color(0xb8c0ccff);
-                        nui_text("Small muted supporting text");
+                        nui_text("Font size, color, wrapping, and alignment are all regular element properties.");
                     }
                     nuiw_row_begin();
-                        NUI {
-                            nui_font(font);
-                            nui_font_color(nuiw_theme_high_contrast()->control_text);
-                            nui_text("Default");
-                        }
-                        NUI {
-                            nui_font(font_large);
-                            nui_font_color(0x5ca4ffff);
-                            nui_text("Blue large");
-                        }
-                        NUI {
-                            nui_font(font_small);
-                            nui_font_color(nuiw_theme_high_contrast()->danger_text);
-                            nui_text("Small warning");
-                        }
+                        _demo_alignment_box(font_small, "start", NUI_LAYOUT_LEFT_TO_RIGHT, NUI_ALIGN_START);
+                        _demo_alignment_box(font_small, "center", NUI_LAYOUT_LEFT_TO_RIGHT, NUI_ALIGN_CENTER);
+                        _demo_alignment_box(font_small, "end", NUI_LAYOUT_LEFT_TO_RIGHT, NUI_ALIGN_END);
                     nuiw_row_end();
+                    _demo_note(font_small, "With left-to-right layout, align moves children vertically.");
+                    nuiw_row_begin();
+                        _demo_alignment_box(font_small, "start", NUI_LAYOUT_TOP_TO_BOTTOM, NUI_ALIGN_START);
+                        _demo_alignment_box(font_small, "center", NUI_LAYOUT_TOP_TO_BOTTOM, NUI_ALIGN_CENTER);
+                        _demo_alignment_box(font_small, "end", NUI_LAYOUT_TOP_TO_BOTTOM, NUI_ALIGN_END);
+                    nuiw_row_end();
+                    _demo_note(font_small, "With top-to-bottom layout, align moves children horizontally.");
                 } else if (demo_page == 2) {
-                    NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Inputs and dropdowns");
-                    }
-                    nuiw_input_text("Object name", name, sizeof name);
-                    bool combo_open = nuiw_combo_begin("Pivot", pivot);
+                    _demo_heading(font_title, "Inputs");
+                    _demo_note(font_small, "Text fields keep a fixed visual size, show focus with a caret, and scroll horizontally when content overflows.");
+                    _demo_code(font_small, "char name[128] = \"Editable\";\nnuiw_input_text(\"Name\", name, sizeof name);");
+                    nuiw_input_text("Name", name, sizeof name);
+                    bool combo_open = nuiw_combo_begin("Image mode", pivot);
                     if (combo_open) {
-                        if (nuiw_combo_item("Median Point", pivot[0] == 'M')) pivot = "Median Point";
-                        if (nuiw_combo_item("Bounding Box", pivot[0] == 'B')) pivot = "Bounding Box";
-                        if (nuiw_combo_item("3D Cursor", pivot[0] == '3')) pivot = "3D Cursor";
+                        if (nuiw_combo_item("Stretch", pivot[0] == 'S')) pivot = "Stretch";
+                        if (nuiw_combo_item("Repeat", pivot[0] == 'R')) pivot = "Repeat";
                     }
                     nuiw_combo_end();
                     nuiw_checkbox("Visible", &visible);
                     nuiw_checkbox("Selectable", &selectable);
-                } else if (demo_page == 3) {
-                    NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Sliders");
-                    }
-                    nuiw_slider_float("Scale", &scale, 0.0f, 1.0f);
                     nuiw_slider_float("Alpha", &alpha, 0.0f, 1.0f);
-                    nuiw_slider_float("Roughness", &roughness, 0.0f, 1.0f);
-                } else if (demo_page == 4) {
+                } else if (demo_page == 3) {
+                    _demo_heading(font_title, "Images");
+                    _demo_note(font_small, "Images can render at native size, repeat as a texture, or stretch to an element box.");
+                    _demo_code(font_small, "nui_image(logo);\nnui_image_mode(NUI_IMAGE_MODE_STRETCH);\nnui_background_image(logo);");
+                    nuiw_row_begin();
+                        NUI {
+                            nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+                            nui_child_gap(6);
+                            _demo_note(font_small, "Native");
+                            NUI {
+                                nui_padding(8, 8, 8, 8);
+                                nui_background_color(0x0d1014ff);
+                                nui_border(0xffffff17, 1);
+                                nui_corner_radius(4);
+                                nui_image(logo);
+                            }
+                        }
+                        NUI {
+                            nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+                            nui_child_gap(6);
+                            _demo_note(font_small, "Repeat");
+                            NUI {
+                                nui_fixed(160, 90);
+                                nui_background_image(logo);
+                                nui_image_mode(NUI_IMAGE_MODE_REPEAT);
+                            }
+                        }
+                        NUI {
+                            nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+                            nui_child_gap(6);
+                            _demo_note(font_small, "Stretch");
+                            NUI {
+                                nui_fixed(160, 90);
+                                nui_background_image(logo);
+                                nui_image_mode(NUI_IMAGE_MODE_STRETCH);
+                            }
+                        }
+                    nuiw_row_end();
+                    _demo_note(font_small, "Drag the bottom-right handle to resize this bordered image container.");
                     NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Selection, radios, and trees");
+                        nui_fixed(image_width, image_height);
+                        nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
+                        nui_padding(8, 8, 8, 8);
+                        nui_child_gap(6);
+                        nui_background_color(0x0d1014ff);
+                        nui_border(0x5ca4ff66, 1);
+                        nui_corner_radius(6);
+                        NUI {
+                            nui_grow_width();
+                            nui_grow_height();
+                            nui_background_image(logo);
+                            nui_image_mode(pivot[0] == 'R' ? NUI_IMAGE_MODE_REPEAT : NUI_IMAGE_MODE_STRETCH);
+                        }
+                        nuiw_row_begin();
+                            NUI { nui_grow_width(); }
+                            nuiw_resize_handle("Image resize", &image_width, &image_height, 180, 120, 560, 340);
+                        nuiw_row_end();
                     }
+                } else if (demo_page == 4) {
+                    _demo_heading(font_title, "Selection");
+                    _demo_note(font_small, "Radios return clicks; your app owns the selected value.");
+                    _demo_code(font_small, "if (nuiw_radio(\"Edge\", mode == 1)) mode = 1;\nnuiw_tree_row(\"Scene\", &open, false);");
                     if (nuiw_radio("Vertex", radio_mode == 0)) radio_mode = 0;
                     if (nuiw_radio("Edge", radio_mode == 1)) radio_mode = 1;
                     if (nuiw_radio("Face", radio_mode == 2)) radio_mode = 2;
-                    nuiw_tree_row("Scene Collection", &tree_open, false);
+                    nuiw_tree_row("Scene", &tree_open, false);
                     if (tree_open) {
                         bool leaf = false;
-                        nuiw_tree_row("Cube", &leaf, true);
-                        nuiw_tree_row("Camera", &leaf, false);
-                        nuiw_tree_row("Area Light", &leaf, false);
+                        nuiw_tree_row("Canvas", &leaf, radio_mode == 0);
+                        nuiw_tree_row("Layer", &leaf, radio_mode == 1);
+                        nuiw_tree_row("Selection bounds", &leaf, radio_mode == 2);
                     }
                 } else if (demo_page == 5) {
-                    NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Popups and dialog-like panels");
+                    _demo_heading(font_title, "Popups and modals");
+                    _demo_note(font_small, "Use popovers for local choices and modals when the rest of the app should be dimmed.");
+                    _demo_code(font_small, "if (nuiw_modal_begin(\"Confirm\", &open)) {\n    ...\n    nuiw_modal_end();\n}");
+                    if (nuiw_button(popover_open ? "Hide popover" : "Show popover")) popover_open = !popover_open;
+                    if (popover_open) {
+                        nuiw_popover_begin();
+                            if (nuiw_button("Increment counter")) click_count++;
+                            nuiw_button("Local action");
+                            nuiw_button("Another action");
+                        nuiw_popover_end();
                     }
-                    nuiw_popover_begin();
-                        nuiw_button("Increment");
-                        nuiw_button("Vertex");
-                        nuiw_button("Edge");
-                    nuiw_popover_end();
-                    nuiw_dialog_begin();
-                        NUI {
-                            nui_text("Apply Modifier?");
-                        }
+                    if (nuiw_button("Open full-screen modal")) modal_open = true;
+                    if (nuiw_modal_begin("Full-screen modal", &modal_open)) {
+                        _demo_note(font, "This dialog is rendered over a faded full-screen overlay. Press Escape or close it below.");
                         nuiw_row_begin();
-                            nuiw_button("Cancel");
-                            nuiw_button("Apply Modifier");
+                            if (nuiw_button("Close")) modal_open = false;
+                            if (nuiw_button("Increment")) click_count++;
                         nuiw_row_end();
-                    nuiw_dialog_end();
-                } else if (demo_page == 6) {
-                    NUI {
-                        nui_font_color(nuiw_theme_high_contrast()->accent);
-                        nui_text("Color");
+                        nuiw_modal_end();
                     }
+                } else if (demo_page == 6) {
+                    _demo_heading(font_title, "Color");
+                    _demo_note(font_small, "The color widget generates its hue strip and triangle texture at runtime.");
+                    _demo_code(font_small, "float rgba[4] = {1, .54f, .13f, 1};\nnuiw_color_rgba(\"Base color\", rgba);");
                     nuiw_color_rgba("Base color", rgba);
                 }
             nuiw_panel_end();
@@ -279,6 +369,9 @@ int main(void) {
         glfwSwapBuffers(window);
     }
 
+    if (logo) {
+        nui_unload_image(logo);
+    }
     nui_unload_font(font_title);
     nui_unload_font(font_large);
     nui_unload_font(font_small);

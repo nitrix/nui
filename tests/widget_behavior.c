@@ -103,6 +103,32 @@ int widget_behavior(int argc, char **argv) {
     assert(text_changed);
     assert(strcmp(text, "AB") == 0);
 
+    nui_frame();
+    nui_input_key(NUI_KEY_LEFT, true, 0);
+    nuiw_begin_frame();
+    nuiw_input_text("Name", text, sizeof text);
+    nui_update();
+    nuiw_end_frame();
+
+    nui_frame();
+    nui_input_key(NUI_KEY_LEFT, false, 0);
+    nui_input_text_utf8("C");
+    nuiw_begin_frame();
+    text_changed = nuiw_input_text("Name", text, sizeof text);
+    nui_update();
+    nuiw_end_frame();
+    assert(text_changed);
+    assert(strcmp(text, "ACB") == 0);
+
+    nui_frame();
+    nui_input_key(NUI_KEY_DELETE, true, 0);
+    nuiw_begin_frame();
+    text_changed = nuiw_input_text("Name", text, sizeof text);
+    nui_update();
+    nuiw_end_frame();
+    assert(text_changed);
+    assert(strcmp(text, "AC") == 0);
+
     float amount = 0.0f;
     draw_slider_frame(&amount);
 
@@ -131,6 +157,73 @@ int widget_behavior(int argc, char **argv) {
     nui_update();
     nuiw_end_frame();
     assert(amount == 1.0f);
+
+    nui_frame();
+    nuiw_begin_frame();
+    bool radio_clicked = nuiw_radio("Option A", false);
+    nui_update();
+    nuiw_end_frame();
+    assert(!radio_clicked);
+
+    int resize_w = 80;
+    int resize_h = 60;
+    nui_frame();
+    nuiw_begin_frame();
+    nuiw_resize_handle("Resize", &resize_w, &resize_h, 40, 40, 160, 140);
+    nui_update();
+    nuiw_end_frame();
+
+    nui_frame();
+    nui_input_mouse_move(8, 8);
+    nui_input_mouse_button(NUI_MOUSE_BUTTON_LEFT, true);
+    nuiw_begin_frame();
+    nuiw_resize_handle("Resize", &resize_w, &resize_h, 40, 40, 160, 140);
+    nui_update();
+    nuiw_end_frame();
+
+    nui_frame();
+    nui_input_mouse_move(38, 28);
+    nuiw_begin_frame();
+    bool resized = nuiw_resize_handle("Resize", &resize_w, &resize_h, 40, 40, 160, 140);
+    nui_update();
+    nuiw_end_frame();
+    assert(resized);
+    assert(resize_w == 110);
+    assert(resize_h == 80);
+
+    nui_frame();
+    nui_input_mouse_button(NUI_MOUSE_BUTTON_LEFT, false);
+    nuiw_begin_frame();
+    nuiw_resize_handle("Resize", &resize_w, &resize_h, 40, 40, 160, 140);
+    nui_update();
+    nuiw_end_frame();
+
+    bool modal_open = true;
+    nui_frame();
+    nuiw_begin_frame();
+    bool modal_visible = nuiw_modal_begin("Confirm", &modal_open);
+    assert(modal_visible);
+    nuiw_button("Inside");
+    nuiw_modal_end();
+    nui_update();
+    nuiw_end_frame();
+    assert(modal_open);
+
+    nui_frame();
+    nui_input_key(NUI_KEY_ESCAPE, true, 0);
+    nuiw_begin_frame();
+    modal_visible = nuiw_modal_begin("Confirm", &modal_open);
+    nui_update();
+    nuiw_end_frame();
+    assert(!modal_visible);
+    assert(!modal_open);
+
+    float color[4] = {1.0f, 0.5f, 0.1f, 1.0f};
+    nui_frame();
+    nuiw_begin_frame();
+    nuiw_color_rgba("Tint", color);
+    nui_update();
+    nuiw_end_frame();
 
     nuiw_fini();
     nui_fini();

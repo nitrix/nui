@@ -263,6 +263,40 @@ struct nui_image *ngl_load_image_from_file(const char *filename) {
     return image;
 }
 
+struct nui_image *ngl_create_image_rgba(int width, int height, const unsigned char *pixels) {
+    if (width <= 0 || height <= 0 || !pixels) {
+        return NULL;
+    }
+
+    struct nui_image *image = malloc(sizeof *image);
+    if (!image) {
+        return NULL;
+    }
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    image->handle = (void *)(uintptr_t)texture;
+    image->width = width;
+    image->height = height;
+    return image;
+}
+
+bool ngl_update_image_rgba(struct nui_image *image, const unsigned char *pixels) {
+    if (!image || !pixels) {
+        return false;
+    }
+
+    GLuint texture = (GLuint)(uintptr_t) image->handle;
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image->width, image->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    return true;
+}
+
 void ngl_unload_image(struct nui_image *image) {
     GLuint id = (GLuint)(uintptr_t) image->handle;
     glDeleteTextures(1, &id);
