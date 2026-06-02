@@ -516,7 +516,7 @@ void _nui_render_element(struct nui_element *el) {
     }
 
     if (el->text) {
-        ctx.backend->draw_text(el->style.font, el->x, el->y, el->text, el->style.font_color);
+        ctx.backend->draw_text(el->style.font, el->x + el->padding.left, el->y + el->padding.top, el->text, el->style.font_color);
     }
 
     for (struct nui_element *child = el->first_child; child != NULL; child = child->next) {
