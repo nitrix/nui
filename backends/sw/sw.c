@@ -17,6 +17,11 @@ struct sw_font {
     float ascent;
 };
 
+struct sw_text_bounds {
+    int min_x, min_y;
+    int max_x, max_y;
+};
+
 unsigned char *pixels = NULL;
 int max_x = 0;
 int max_y = 0;
@@ -251,6 +256,35 @@ void sw_unload_font(struct nui_font *font) {
     free(font);
 }
 
+static bool _sw_measure_text_bounds(const struct sw_font *font, const char *text, struct sw_text_bounds *bounds) {
+    float fx = 0;
+    float fy = font->ascent;
+    bool has_bounds = false;
+
+    while (*text) {
+        stbtt_aligned_quad q;
+
+        bool opengl = true;
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+
+        if (!has_bounds) {
+            bounds->min_x = (int) q.x0;
+            bounds->min_y = (int) q.y0;
+            bounds->max_x = (int) q.x1;
+            bounds->max_y = (int) q.y1;
+            has_bounds = true;
+        } else {
+            if ((int) q.x0 < bounds->min_x) bounds->min_x = (int) q.x0;
+            if ((int) q.y0 < bounds->min_y) bounds->min_y = (int) q.y0;
+            if ((int) q.x1 > bounds->max_x) bounds->max_x = (int) q.x1;
+            if ((int) q.y1 > bounds->max_y) bounds->max_y = (int) q.y1;
+        }
+        text++;
+    }
+
+    return has_bounds;
+}
+
 void sw_measure_text(const struct nui_font *font, const char *text, int *width, int *height) {
     *width = 0;
     *height = 0;
@@ -260,31 +294,24 @@ void sw_measure_text(const struct nui_font *font, const char *text, int *width, 
     }
 
     struct sw_font *sw_font = font->handle;
-
-    float fx = 0;
-    float fy = sw_font->ascent;
-
-    while (*text) {
-        stbtt_aligned_quad q;
-
-        bool opengl = true;
-        stbtt_GetBakedQuad(sw_font->baked, sw_font->pixels_width, sw_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
-
-        if ((int)q.x1 > *width) {
-            *width = (int)q.x1;
-        }
-        if ((int)q.y1 > *height) {
-            *height = (int)q.y1;
-        }
-
-        text++;
+    struct sw_text_bounds bounds;
+    if (!_sw_measure_text_bounds(sw_font, text, &bounds)) {
+        return;
     }
+
+    *width = bounds.max_x - bounds.min_x;
+    *height = bounds.max_y - bounds.min_y;
 }
 
 void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
     printf("SW_DRAW_TEXT\n");
 
     struct sw_font *sw_font = font->handle;
+    struct sw_text_bounds bounds;
+
+    if (!_sw_measure_text_bounds(sw_font, text, &bounds)) {
+        return;
+    }
 
     float fx = 0;
     float fy = sw_font->ascent;
@@ -300,8 +327,8 @@ void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, u
 
         for (int iy = (int)q.y0; iy < (int)q.y1; iy++) {
             for (int ix = (int)q.x0; ix < (int)q.x1; ix++) {
-                int px = x + ix;
-                int py = y + iy;
+                int px = x + ix - bounds.min_x;
+                int py = y + iy - bounds.min_y;
 
                 float u = q.s0 + (ix - q.x0) / (q.x1 - q.x0) * (q.s1 - q.s0);
                 float v = q.t0 + (iy - q.y0) / (q.y1 - q.y0) * (q.t1 - q.t0);

@@ -33,6 +33,11 @@ struct ngl_font {
     float ascent;
 };
 
+struct ngl_text_bounds {
+    int min_x, min_y;
+    int max_x, max_y;
+};
+
 enum {
     MODE_NORMAL = 0,
     MODE_IMAGE = 1,
@@ -379,6 +384,35 @@ void ngl_draw_image(int x, int y, int w, int h, struct nui_image *image) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
+static bool _ngl_measure_text_bounds(const struct ngl_font *font, const char *text, struct ngl_text_bounds *bounds) {
+    float fx = 0;
+    float fy = font->ascent;
+    bool has_bounds = false;
+
+    while (*text) {
+        stbtt_aligned_quad q;
+
+        bool opengl = true;
+        stbtt_GetBakedQuad(font->baked, font->pixels_width, font->pixels_height, *text-32, &fx, &fy, &q, opengl);
+
+        if (!has_bounds) {
+            bounds->min_x = (int) q.x0;
+            bounds->min_y = (int) q.y0;
+            bounds->max_x = (int) q.x1;
+            bounds->max_y = (int) q.y1;
+            has_bounds = true;
+        } else {
+            if ((int) q.x0 < bounds->min_x) bounds->min_x = (int) q.x0;
+            if ((int) q.y0 < bounds->min_y) bounds->min_y = (int) q.y0;
+            if ((int) q.x1 > bounds->max_x) bounds->max_x = (int) q.x1;
+            if ((int) q.y1 > bounds->max_y) bounds->max_y = (int) q.y1;
+        }
+        text++;
+    }
+
+    return has_bounds;
+}
+
 void ngl_measure_text(const struct nui_font *font, const char *text, int *width, int *height) {
     *width = 0;
     *height = 0;
@@ -388,29 +422,22 @@ void ngl_measure_text(const struct nui_font *font, const char *text, int *width,
     }
 
     struct ngl_font *ngl_font = font->handle;
-
-    float fx = 0;
-    float fy = ngl_font->ascent;
-
-    while (*text) {
-        stbtt_aligned_quad q;
-
-        bool opengl = true;
-        stbtt_GetBakedQuad(ngl_font->baked, ngl_font->pixels_width, ngl_font->pixels_height, *text-32, &fx, &fy, &q, opengl);
-
-        if ((int)q.x1 > *width) {
-            *width = (int)q.x1;
-        }
-        if ((int)q.y1 > *height) {
-            *height = (int)q.y1;
-        }
-
-        text++;
+    struct ngl_text_bounds bounds;
+    if (!_ngl_measure_text_bounds(ngl_font, text, &bounds)) {
+        return;
     }
+
+    *width = bounds.max_x - bounds.min_x;
+    *height = bounds.max_y - bounds.min_y;
 }
 
 void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color) {
     struct ngl_font *ngl_font = font->handle;
+    struct ngl_text_bounds bounds;
+
+    if (!_ngl_measure_text_bounds(ngl_font, text, &bounds)) {
+        return;
+    }
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, ngl_font->texture);
@@ -436,7 +463,7 @@ void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, 
         _color_to_floats(color, &r, &g, &b, &a);
         glUniform4f(uniforms.color, r, g, b, a);
 
-        glUniform2f(uniforms.position, (float)x + q.x0, (float)y + q.y0);
+        glUniform2f(uniforms.position, (float)x + q.x0 - bounds.min_x, (float)y + q.y0 - bounds.min_y);
         glUniform2f(uniforms.size, q.x1 - q.x0, q.y1 - q.y0);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
