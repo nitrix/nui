@@ -27,6 +27,7 @@ static struct {
 void _init_element(struct nui_element *el) {
     struct nui_element template = {
         .layout = NUI_LAYOUT_LEFT_TO_RIGHT,
+        .image_mode = NUI_IMAGE_MODE_REPEAT,
     };
 
     *el = template;
@@ -185,6 +186,10 @@ void nui_background_image(const struct nui_image *image) {
     ctx.current->style.background_image = image;
 }
 
+void nui_image_mode(enum nui_image_mode mode) {
+    ctx.current->image_mode = mode;
+}
+
 void nui_padding(int top, int right, int bottom, int left) {
     ctx.current->padding.top = top;
     ctx.current->padding.right = right;
@@ -250,6 +255,15 @@ void _nui_fit_sizing_element(struct nui_element *el, bool xaxis) {
                 el->w = MAX(el->w, text_width);
             } else {
                 el->h = MAX(el->h, text_height);
+            }
+        }
+
+        // Image content.
+        if (el->image) {
+            if (xaxis) {
+                el->w = MAX(el->w, el->image->width);
+            } else {
+                el->h = MAX(el->h, el->image->height);
             }
         }
 
@@ -510,9 +524,17 @@ void _nui_render_element(struct nui_element *el) {
     }
 
     if (el->style.background_image) {
-        ctx.backend->draw_image(el->x, el->y, el->w, el->h, el->style.background_image);
+        ctx.backend->draw_image(el->x, el->y, el->w, el->h, el->style.background_image, el->image_mode);
     } else if (color) { // Only draw if color is not fully transparent.
         ctx.backend->draw_rect(el->x, el->y, el->w, el->h, color);
+    }
+
+    if (el->image) {
+        int content_x = el->x + el->padding.left;
+        int content_y = el->y + el->padding.top;
+        int content_w = MAX(0, el->w - el->padding.left - el->padding.right);
+        int content_h = MAX(0, el->h - el->padding.top - el->padding.bottom);
+        ctx.backend->draw_image(content_x, content_y, content_w, content_h, el->image, el->image_mode);
     }
 
     if (el->text) {
@@ -552,6 +574,11 @@ void nui_font(const struct nui_font *font) {
     ctx.current->style.font = font;
 }
 
+void nui_image(const struct nui_image *image) {
+    ctx.current->image = image;
+    ctx.current->text = NULL;
+}
+
 void nui_text(const char *fmt, ...) {
     va_list args;
 
@@ -566,4 +593,5 @@ void nui_text(const char *fmt, ...) {
     va_end(args);
 
     ctx.current->text = buffer;
+    ctx.current->image = NULL;
 }

@@ -14,7 +14,7 @@ static struct {
 } viewport;
 static struct {
     GLint position, size, color;
-    GLint viewport;
+    GLint viewport, image_mode;
     GLint texture, mode, image_size;
     GLint uv_offset, uv_scale;
 } uniforms;
@@ -60,6 +60,7 @@ void _load_shader(void) {
         uniform vec2 u_size;
         uniform vec2 u_viewport;
         uniform vec2 u_image_size;
+        uniform int u_image_mode; // 0 = repeat, 1 = stretch.
         uniform vec2 u_uv_offset;
         uniform vec2 u_uv_scale;
 
@@ -71,7 +72,11 @@ void _load_shader(void) {
             gl_Position = vec4(ndc_x, ndc_y, 0.0, 1.0);
 
             if (u_mode == 1) {
-                v_uv = a_uv * (u_size / u_image_size);
+                if (u_image_mode == 1) {
+                    v_uv = a_uv;
+                } else {
+                    v_uv = a_uv * (u_size / u_image_size);
+                }
             } else if (u_mode == 2) {
                 v_uv = u_uv_offset + a_uv * u_uv_scale;
             }
@@ -148,6 +153,7 @@ void _load_shader(void) {
     uniforms.texture = glGetUniformLocation(program, "u_texture");
     uniforms.mode = glGetUniformLocation(program, "u_mode");
     uniforms.image_size = glGetUniformLocation(program, "u_image_size");
+    uniforms.image_mode = glGetUniformLocation(program, "u_image_mode");
     uniforms.uv_offset = glGetUniformLocation(program, "u_uv_offset");
     uniforms.uv_scale = glGetUniformLocation(program, "u_uv_scale");
 }
@@ -369,16 +375,19 @@ void ngl_draw_rect(int x, int y, int w, int h, uint32_t color) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-void ngl_draw_image(int x, int y, int w, int h, struct nui_image *image) {
+void ngl_draw_image(int x, int y, int w, int h, const struct nui_image *image, enum nui_image_mode mode) {
     GLuint texture = (GLuint)(uintptr_t) image->handle;
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, mode == NUI_IMAGE_MODE_STRETCH ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, mode == NUI_IMAGE_MODE_STRETCH ? GL_CLAMP_TO_EDGE : GL_REPEAT);
 
     glUniform2f(uniforms.position, (float) x, (float) y);
     glUniform2f(uniforms.size, (float) w, (float) h);
     glUniform1i(uniforms.texture, 0);
     glUniform2f(uniforms.image_size, (float) image->width, (float) image->height);
+    glUniform1i(uniforms.image_mode, mode);
     glUniform1i(uniforms.mode, MODE_IMAGE);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);

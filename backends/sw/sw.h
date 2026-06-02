@@ -9,7 +9,7 @@ void sw_fini(void);
 void sw_before_render(int width, int height);
 void sw_after_render(void);
 void sw_draw_rect(int x, int y, int width, int height, uint32_t color);
-void sw_draw_image(int x, int y, int width, int height, const struct nui_image *image);
+void sw_draw_image(int x, int y, int width, int height, const struct nui_image *image, enum nui_image_mode mode);
 void sw_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
 void sw_measure_text(const struct nui_font *font, const char *text, int *width, int *height);
 void sw_export(const char *filename);

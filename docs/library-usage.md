@@ -61,17 +61,22 @@ nui_element_end();
 
 By convention, we place all the element's attributes at the top prior to the children.
 
-Sometimes other convenience macros exists like:
-
-```c
-NUI_IMAGE(image);
-```
-
-which really just a helper to get an element with a background image that has a fixed size the same as the image:
+Images and text are configured on regular elements:
 
 ```c
 NUI {
-    nui_fixed(image->width, image->height);
-    nui_background_image(image);
+    nui_image(image);
+}
+```
+
+An image element fits to the image's native size by default, just like a text
+element fits to its measured text. If the element becomes larger than the image,
+the image repeats by default. Use `nui_image_mode()` to stretch it instead:
+
+```c
+NUI {
+    nui_grow_width();
+    nui_image(image);
+    nui_image_mode(NUI_IMAGE_MODE_STRETCH);
 }
 ```

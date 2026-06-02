@@ -9,7 +9,7 @@ void ngl_fini(void);
 void ngl_before_render(int width, int height);
 void ngl_after_render(void);
 void ngl_draw_rect(int x, int y, int w, int h, uint32_t color);
-void ngl_draw_image(int x, int y, int w, int h, const struct nui_image *image);
+void ngl_draw_image(int x, int y, int w, int h, const struct nui_image *image, enum nui_image_mode mode);
 void ngl_draw_text(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
 void ngl_measure_text(const struct nui_font *font, const char *text, int *width, int *height);
 struct nui_image *ngl_load_image_from_file(const char *filename);

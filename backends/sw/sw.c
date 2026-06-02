@@ -136,7 +136,7 @@ void sw_draw_rect(int x, int y, int width, int height, uint32_t color) {
     }
 }
 
-void sw_draw_image(int x, int y, int width, int height, struct nui_image *image) {
+void sw_draw_image(int x, int y, int width, int height, const struct nui_image *image, enum nui_image_mode mode) {
     // printf("sw_draw_image: x=%d, y=%d, width=%d, height=%d, image_width=%d, image_height=%d\n", x, y, width, height, image->width, image->height);
 
     unsigned char *image_pixels = (unsigned char *) image->handle;
@@ -148,6 +148,10 @@ void sw_draw_image(int x, int y, int width, int height, struct nui_image *image)
 
             int ax = ix % image->width;
             int ay = iy % image->height;
+            if (mode == NUI_IMAGE_MODE_STRETCH) {
+                ax = ix * image->width / width;
+                ay = iy * image->height / height;
+            }
 
             uint8_t r = image_pixels[(image->width * ay + ax)*4 + 0];
             uint8_t g = image_pixels[(image->width * ay + ax)*4 + 1];

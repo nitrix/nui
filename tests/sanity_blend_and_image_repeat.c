@@ -20,7 +20,9 @@ int sanity_blend_and_image_repeat(int argc, char **argv) {
             nui_background_color(0xFF000033);
             nui_layout(NUI_LAYOUT_TOP_TO_BOTTOM);
 
-            NUI_IMAGE(logo);
+            NUI {
+                nui_image(logo);
+            }
 
             NUI {
                 nui_fixed_width(200);

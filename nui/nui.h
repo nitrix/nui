@@ -10,6 +10,11 @@ enum nui_layout {
     NUI_LAYOUT_TOP_TO_BOTTOM,
 };
 
+enum nui_image_mode {
+    NUI_IMAGE_MODE_REPEAT,
+    NUI_IMAGE_MODE_STRETCH,
+};
+
 enum nui_element_flags : uint32_t {
     NUI_ELEMENT_FLAG_HAS_BACKGROUND_COLOR = (1 << 0),
     NUI_ELEMENT_FLAG_HAS_FONT_COLOR = (1 << 1),
@@ -41,6 +46,8 @@ struct nui_element {
         const struct nui_image *background_image;
         const struct nui_font *font;
     } style;
+    enum nui_image_mode image_mode;
+    const struct nui_image *image;
     const char *text;
 
     // Position and size which gets computed during the update phase.
@@ -65,7 +72,7 @@ struct nui_backend {
     void (*before_render)(int width, int height);
     void (*after_render)(void);
     void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
-    void (*draw_image)(int x, int y, int w, int h, const struct nui_image *image);
+    void (*draw_image)(int x, int y, int w, int h, const struct nui_image *image, enum nui_image_mode mode);
     void (*draw_text)(const struct nui_font *font, int x, int y, const char *text, uint32_t color);
     void (*measure_text)(const struct nui_font *font, const char *text, int *width, int *height);
     struct nui_image *(*load_image_from_file)(const char *filename);
@@ -118,13 +125,17 @@ void nui_child_gap(int gap);
 // Text.
 void nui_text(const char *fmt, ...);
 
+// Images.
+void nui_image(const struct nui_image *image);
+void nui_image_mode(enum nui_image_mode mode);
+
 // Styling.
 void nui_background_color(uint32_t color);
 void nui_background_image(const struct nui_image *image);
 void nui_font(const struct nui_font *font);
 void nui_font_color(uint32_t color);
 
-// Images.
+// Image loading.
 struct nui_image *nui_load_image_from_file(const char *filename);
 void nui_unload_image(struct nui_image *image);
 
@@ -135,6 +146,5 @@ void nui_unload_font(struct nui_font *font);
 // Convenience macros.
 #define NUI_ONCE(before, after) for (size_t _t ## __LINE__ = 0; (_t ## __LINE__ < 1 ? (before, 1) : 0); (after, _t ## __LINE__++))
 #define NUI NUI_ONCE(nui_element_begin(), nui_element_end())
-#define NUI_IMAGE(image) NUI{nui_fixed((image)->width, (image)->height); nui_background_image(image);}
 
 #endif
